@@ -23,7 +23,7 @@ export function registerSettings(): void {
     scope: 'world',
     config: true,
     type: String,
-    default: 'localhost',
+    default: '100.91.31.34',
   });
 
   game.settings.register(MODULE_ID, 'mcpPort', {
