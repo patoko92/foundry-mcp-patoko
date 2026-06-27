@@ -37,17 +37,25 @@ function isGM(): boolean {
 /**
  * Dispatch an incoming MCP query to the appropriate handler method.
  */
+/** Convert kebab-case method name to camelCase (e.g. 'get-world-info' → 'getWorldInfo') */
+function toCamelCase(str: string): string {
+  return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
 export async function handleQuery(
   method: string,
   args: Record<string, unknown>
 ): Promise<QueryResult> {
   try {
+    // Convert kebab-case to camelCase for internal dispatch
+    const camelMethod = toCamelCase(method);
+
     // Permission check for write operations
-    if (WRITE_METHODS.has(method) && !isGM()) {
+    if (WRITE_METHODS.has(camelMethod) && !isGM()) {
       return error(`Permission denied: only GM users can execute '${method}'`);
     }
 
-    const handler = methodMap[method];
+    const handler = methodMap[camelMethod];
     if (!handler) {
       return error(`Unknown method: ${method}`);
     }
