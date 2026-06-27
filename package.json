@@ -1,0 +1,17 @@
+{
+  "name": "foundry-mcp-patoko",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Custom MCP server for Foundry VTT — Patoko infrastructure",
+  "workspaces": [
+    "packages/shared",
+    "packages/mcp-server",
+    "packages/foundry-module"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev -w packages/mcp-server",
+    "dev:mock": "npm run dev:mock -w packages/mcp-server"
+  },
+  "license": "UNLICENSED"
+}
