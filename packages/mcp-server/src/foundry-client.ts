@@ -22,7 +22,8 @@ interface PendingRequest {
 }
 
 /**
- * WebSocket client that connects to the Foundry VTT module and sends MCP queries.
+ * WebSocket client that connects to the bridge server and sends MCP queries
+ * which are forwarded to the Foundry VTT module.
  */
 export class FoundryClient implements IFoundryClient {
   private ws: WebSocket | null = null;
@@ -63,8 +64,16 @@ export class FoundryClient implements IFoundryClient {
 
       this.ws.on('open', () => {
         this._connected = true;
-        this.reconnectDelay = 1000; // reset backoff
+        this.reconnectDelay = 1000;
         console.error(`[FoundryClient] Connected to ${this.url}`);
+
+        // Register as MCP control client with the bridge server
+        this.ws?.send(JSON.stringify({
+          type: 'register',
+          id: randomUUID(),
+          clientType: 'mcp',
+        }));
+
         resolve();
       });
 
@@ -88,10 +97,8 @@ export class FoundryClient implements IFoundryClient {
 
       this.ws.on('error', (err) => {
         console.error('[FoundryClient] WebSocket error:', err.message);
-        // Don't reject here — 'close' will fire and handle reconnect
       });
 
-      // Timeout for initial connection
       const initTimeout = setTimeout(() => {
         if (!this._connected) {
           this.ws?.close();
@@ -99,7 +106,6 @@ export class FoundryClient implements IFoundryClient {
         }
       }, this.timeout);
 
-      // Clear the init timeout once connected
       this.ws.once('open', () => clearTimeout(initTimeout));
     });
   }
@@ -139,8 +145,9 @@ export class FoundryClient implements IFoundryClient {
     });
   }
 
-  private handleMessage(msg: WebSocketMessage): void {
-    switch (msg.type) {
+  private handleMessage(msg: WebSocketMessage | Record<string, unknown>): void {
+    const type = (msg as Record<string, unknown>).type as string;
+    switch (type) {
       case 'mcp-response': {
         const response = msg as McpResponseMessage;
         const pending = this.pending.get(response.id);
@@ -174,9 +181,27 @@ export class FoundryClient implements IFoundryClient {
         this.ws?.send(JSON.stringify({ type: 'pong', id: msg.id }));
         break;
       }
-      case 'pong':
-        // Nothing to do
+      case 'pong': {
         break;
+      }
+      case 'register-ack': {
+        const ack = msg as unknown as { data?: { foundryConnected?: boolean } };
+        if (ack.data?.foundryConnected) {
+          console.error('[FoundryClient] Bridge: Foundry module is connected');
+        } else {
+          console.error('[FoundryClient] Bridge: waiting for Foundry module to connect...');
+        }
+        break;
+      }
+      case 'bridge-status': {
+        const status = msg as unknown as { data?: { foundryConnected?: boolean } };
+        if (status.data?.foundryConnected) {
+          console.error('[FoundryClient] Bridge: Foundry module connected');
+        } else {
+          console.error('[FoundryClient] Bridge: Foundry module disconnected');
+        }
+        break;
+      }
     }
   }
 
@@ -202,7 +227,6 @@ export class FoundryClient implements IFoundryClient {
       }
     }, this.reconnectDelay);
 
-    // Exponential backoff capped at 30s
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
   }
 }
