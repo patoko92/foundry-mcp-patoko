@@ -17,6 +17,9 @@ declare global {
   const Scene: DocumentConstructor;
   const JournalEntry: DocumentConstructor;
   const Token: any;
+  const Combat: DocumentConstructor;
+  const ChatMessage: DocumentConstructor;
+  const Folder: DocumentConstructor;
 
   interface Game {
     world: { id: string; name: string; title: string; description: string };
@@ -24,11 +27,14 @@ declare global {
     version: string;
     data: { version: string };
     user: { id: string; name: string; role: number; isGM: boolean } | null;
-    users: { id: string; name: string; role: number }[];
+    users: { id: string; name: string; role: number }[] & { get(id: string): any };
     actors: DocumentCollection<any>;
     scenes: DocumentCollection<any> & { current: any };
     journal: DocumentCollection<any>;
     combat: any;
+    macros: DocumentCollection<any>;
+    folders: DocumentCollection<any>;
+    tables: DocumentCollection<any>;
     packs: CompendiumCollection;
     modules: {
       get(id: string): {

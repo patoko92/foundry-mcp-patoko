@@ -182,6 +182,134 @@ export interface GetTokenDetailsArgs {
   sceneId?: string;
 }
 
+// Actor Extended
+export interface GetActorItemsArgs {
+  actorId: string;
+  type?: string;
+}
+export interface GetActorSpellsArgs {
+  actorId: string;
+  level?: number;
+}
+export interface UpdateActorHpArgs {
+  actorId: string;
+  amount: number;
+  mode: 'damage' | 'heal' | 'set';
+}
+export interface AddItemToActorArgs {
+  actorId: string;
+  itemId?: string;
+  pack?: string;
+  data?: Record<string, unknown>;
+}
+export interface RemoveItemFromActorArgs {
+  actorId: string;
+  itemId: string;
+}
+
+// Token Extended
+export interface UpdateTokenArgs {
+  tokenId: string;
+  data: Record<string, unknown>;
+  sceneId?: string;
+}
+export interface DeleteTokensArgs {
+  tokenIds: string[];
+  sceneId?: string;
+}
+export interface ToggleTokenConditionArgs {
+  tokenId: string;
+  condition: string;
+  active: boolean;
+  level?: number;
+}
+
+// Combat Extended
+export interface StartCombatArgs {
+  sceneId?: string;
+  combatantTokenIds?: string[];
+}
+export interface AddCombatantArgs {
+  tokenId?: string;
+  actorId?: string;
+  name?: string;
+  hidden?: boolean;
+}
+export interface RemoveCombatantArgs {
+  combatantId: string;
+}
+export interface SetInitiativeArgs {
+  combatantId: string;
+  value: number;
+}
+
+// Chat
+export interface SendChatMessageArgs {
+  content: string;
+  speaker?: string;
+  type?: 'ic' | 'ooc' | 'emote';
+}
+export interface SendWhisperArgs {
+  content: string;
+  targetUserId: string;
+  speaker?: string;
+}
+
+// Ownership
+export interface AssignActorOwnershipArgs {
+  actorId: string;
+  userId: string;
+  level?: number;
+}
+export interface RemoveActorOwnershipArgs {
+  actorId: string;
+  userId: string;
+}
+export interface ListActorOwnershipArgs {
+  actorId: string;
+}
+
+// Macros
+export interface ExecuteMacroArgs {
+  name?: string;
+  id?: string;
+}
+
+// Effects
+export interface ListActorEffectsArgs {
+  actorId: string;
+}
+export interface AddEffectToActorArgs {
+  actorId: string;
+  name: string;
+  changes: Array<{ key: string; mode: number; value: string }>;
+  duration?: Record<string, unknown>;
+}
+export interface RemoveEffectFromActorArgs {
+  actorId: string;
+  effectId: string;
+}
+
+// Folders
+export interface ListFoldersArgs {
+  type?: string;
+}
+export interface CreateFolderArgs {
+  name: string;
+  type: string;
+  parent?: string;
+}
+
+// Tables
+export interface RollTableArgs {
+  tableId: string;
+}
+
+// Scene Notes
+export interface GetSceneNotesArgs {
+  sceneId?: string;
+}
+
 // ============================================================
 // Foundry Data Types (simplified)
 // ============================================================
@@ -272,4 +400,36 @@ export interface CompendiumResult {
   type: string;
   img?: string;
   system?: Record<string, unknown>;
+}
+
+export interface FoundryMacro {
+  _id: string;
+  name: string;
+  type: string;
+  command: string;
+  author: string;
+}
+
+export interface FoundryActiveEffect {
+  _id: string;
+  name: string;
+  icon: string;
+  disabled: boolean;
+  duration: Record<string, unknown>;
+  changes: Array<{ key: string; mode: number; value: string }>;
+}
+
+export interface FoundryFolder {
+  _id: string;
+  name: string;
+  type: string;
+  parent: string | null;
+  children: string[];
+}
+
+export interface FoundryRollTable {
+  _id: string;
+  name: string;
+  description: string;
+  results: Array<{ _id: string; text: string; type: number; range: [number, number] }>;
 }
