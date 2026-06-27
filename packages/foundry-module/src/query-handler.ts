@@ -10,6 +10,29 @@ const WRITE_METHODS = new Set([
   'switchScene',
   'createJournal',
   'moveToken',
+  'updateActorHp',
+  'addItemToActor',
+  'removeItemFromActor',
+  'updateToken',
+  'deleteTokens',
+  'toggleTokenCondition',
+  'startCombat',
+  'endCombat',
+  'nextTurn',
+  'previousTurn',
+  'addCombatant',
+  'removeCombatant',
+  'rollAllInitiative',
+  'setInitiative',
+  'sendChatMessage',
+  'sendWhisper',
+  'assignActorOwnership',
+  'removeActorOwnership',
+  'executeMacro',
+  'addEffectToActor',
+  'removeEffectFromActor',
+  'createFolder',
+  'rollTable',
 ]);
 
 export interface QueryResult {
@@ -93,6 +116,47 @@ const methodMap: Record<string, MethodHandler> = {
   listTokens,
   getTokenDetails,
   moveToken,
+  // Actor Extended
+  getActorItems,
+  getActorSpells,
+  updateActorHp,
+  addItemToActor,
+  removeItemFromActor,
+  // Token Extended
+  updateToken,
+  deleteTokens,
+  toggleTokenCondition,
+  // Combat Extended
+  startCombat,
+  endCombat,
+  nextTurn,
+  previousTurn,
+  addCombatant,
+  removeCombatant,
+  rollAllInitiative,
+  setInitiative,
+  // Chat
+  sendChatMessage,
+  sendWhisper,
+  // Ownership
+  assignActorOwnership,
+  removeActorOwnership,
+  listActorOwnership,
+  // Macros
+  listMacros,
+  executeMacro,
+  // Effects
+  listActorEffects,
+  addEffectToActor,
+  removeEffectFromActor,
+  // Folders
+  listFolders,
+  createFolder,
+  // Rollable Tables
+  listRollTables,
+  rollTable,
+  // Scene Notes
+  getSceneNotes,
 };
 
 // ─── World Info ─────────────────────────────────────────────────────
