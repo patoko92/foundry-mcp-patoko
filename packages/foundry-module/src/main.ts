@@ -17,8 +17,8 @@ let client: McpWebSocketClient | null = null;
  * Register module settings on init.
  */
 Hooks.once('init', () => {
-  logInfo('Initializing Foundry MCP Patoko module');
   registerSettings();
+  logInfo('Initializing Foundry MCP Patoko module');
 
   // Expose a public API on the module
   const mod = game.modules.get(MODULE_ID);
