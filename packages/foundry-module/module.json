@@ -1,0 +1,26 @@
+{
+  "id": "foundry-mcp-patoko",
+  "title": "Foundry MCP Patoko",
+  "description": "MCP bridge for Patoko infrastructure",
+  "version": "0.1.0",
+  "author": "patoko92",
+  "esmodules": ["./dist/main.js"],
+  "socket": true,
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "relationships": {
+    "systems": [
+      { "id": "dnd5e", "type": "system" },
+      { "id": "pf2e", "type": "system" }
+    ]
+  },
+  "packs": [],
+  "authors": [
+    {
+      "name": "patoko92",
+      "url": "https://github.com/patoko92"
+    }
+  ]
+}
