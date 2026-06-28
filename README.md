@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔥 Foundry MCP Patoko
+# 🔥 Foundry MCP
 
 **A custom MCP (Model Context Protocol) server bridging Foundry VTT to AI assistants via WebSocket.**
 
@@ -16,7 +16,7 @@
 
 ## What Is This?
 
-Foundry MCP Patoko connects [Foundry VTT](https://foundryvtt.com/) to any MCP-compatible AI assistant (like [Hermes Agent](https://hermes-agent.nousresearch.com/)) via the [Model Context Protocol](https://modelcontextprotocol.io/). It enables natural language interaction with your tabletop campaign — read characters, manage combat, roll dice, create journals, and more.
+Foundry MCP connects [Foundry VTT](https://foundryvtt.com/) to any MCP-compatible AI assistant (like [Hermes Agent](https://hermes-agent.nousresearch.com/), Claude Desktop, or Cursor) via the [Model Context Protocol](https://modelcontextprotocol.io/). It enables natural language interaction with your tabletop campaign — read characters, manage combat, roll dice, create journals, and more.
 
 ### Key Features
 
@@ -37,17 +37,17 @@ Foundry MCP Patoko connects [Foundry VTT](https://foundryvtt.com/) to any MCP-co
 │  (Hermes, etc.)  │                  │  (Node.js)   │                     │  (Node.js)    │                     │  (Browser/ESM) │
 └──────────────────┘                  └──────────────┘                     └───────────────┘                     └────────────────┘
                                               │                                    │                                    │
-                                         hermes-server                       hermes-server                           sv2 (browser)
-                                        (MCP stdio)                        (WS 0.0.0.0:31415)                    (Foundry VTT)
+                                         your-server                        your-server                          your-foundry
+                                        (MCP stdio)                       (WS port 31415)                      (v13+ / v14)
 ```
 
 ### Components
 
 | Component | Process | Port | Location | Description |
 |-----------|---------|------|----------|-------------|
-| **MCP Server** | Spawned by Hermes (stdio) | — | hermes-server | Translates MCP protocol ↔ WebSocket queries |
-| **Bridge Server** | systemd service | `0.0.0.0:31415` | hermes-server | Routes messages between MCP server and Foundry module |
-| **Foundry Module** | Runs in GM browser | — | sv2 (Foundry VTT) | Executes Foundry API calls, returns results |
+| **MCP Server** | Spawned by Hermes (stdio) | — | Same as AI assistant | Translates MCP protocol ↔ WebSocket queries |
+| **Bridge Server** | Persistent service | `0.0.0.0:31415` | Same or remote | Routes messages between MCP server and Foundry module |
+| **Foundry Module** | Runs in GM browser | — | Foundry VTT server | Executes Foundry API calls, returns results |
 
 ---
 
@@ -75,11 +75,13 @@ In Foundry → **Game Settings** → **Module Settings** → **Foundry MCP Patok
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| MCP Server Host | `100.91.31.34` | IP/hostname of the machine running the Bridge Server |
+| MCP Server Host | `localhost` | IP/hostname of the machine running the Bridge Server |
 | MCP Server Port | `31415` | WebSocket port |
 | MCP Namespace | `/foundry-mcp` | WebSocket path (do not change) |
 | Auto Connect | ✅ | Connect on Foundry startup |
 | Log Level | `info` | Debug verbosity |
+
+> **Note:** If Foundry and the Bridge Server run on different machines, change `MCP Server Host` to the Bridge Server's IP address.
 
 ### 3. Deploy the Bridge Server
 
@@ -92,7 +94,7 @@ cd foundry-mcp-patoko
 npm install
 npm run build
 
-# Create systemd service
+# Create systemd service (Linux)
 cat > /etc/systemd/system/foundry-mcp-bridge.service << 'EOF'
 [Unit]
 Description=Foundry MCP Bridge Server
@@ -115,35 +117,40 @@ systemctl daemon-reload
 systemctl enable --now foundry-mcp-bridge
 ```
 
-Verify: `curl http://localhost:31415/health`
+Verify it's running:
+
+```bash
+curl http://localhost:31415/health
+# Should return: {"status":"ok","foundryConnected":false,...}
+```
 
 ### 4. Register the MCP Server with Hermes
 
 ```bash
 hermes mcp add foundry-patoko \
   --command node \
-  --arg "/opt/foundry-mcp-patoko/packages/mcp-server/dist/index.js"
+  --arg "/path/to/foundry-mcp-patoko/packages/mcp-server/dist/index.js"
 ```
 
-Then **fix the env config** (hermes mcp add has a known bug with `--env`):
-
-```python
-python3 -c "
-import yaml
-with open('/root/.hermes/config.yaml') as f: cfg = yaml.safe_load(f)
-cfg['mcp_servers']['foundry-patoko'] = {
-    'command': 'node',
-    'args': ['/opt/foundry-mcp-patoko/packages/mcp-server/dist/index.js'],
-    'env': {
-        'WS_HOST': '127.0.0.1',
-        'WS_PORT': '31415',
-        'WS_NAMESPACE': '/foundry-mcp'
-    },
-    'enabled': True
-}
-with open('/root/.hermes/config.yaml', 'w') as f: yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
-"
-```
+> **⚠️ Important:** `hermes mcp add --env` has a known bug — it puts env vars as CLI args instead of the `env:` config dict. Always fix manually after:
+>
+> ```python
+> python3 -c "
+> import yaml
+> with open('/root/.hermes/config.yaml') as f: cfg = yaml.safe_load(f)
+> cfg['mcp_servers']['foundry-patoko'] = {
+>     'command': 'node',
+>     'args': ['/path/to/foundry-mcp-patoko/packages/mcp-server/dist/index.js'],
+>     'env': {
+>         'WS_HOST': '127.0.0.1',
+>         'WS_PORT': '31415',
+>         'WS_NAMESPACE': '/foundry-mcp'
+>     },
+>     'enabled': True
+> }
+> with open('/root/.hermes/config.yaml', 'w') as f: yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+> "
+> ```
 
 Restart Hermes: `hermes restart`
 
@@ -394,6 +401,12 @@ This was a known bug in v0.1.1 (fixed in v0.1.2). Ensure you are on v0.2.0+.
 
 Restart Hermes after adding the MCP server: `hermes restart`
 
+### Foundry and Bridge on different machines
+
+1. Change `MCP Server Host` in module settings to the Bridge Server's IP
+2. Ensure the Bridge Server binds to `0.0.0.0` (default), not just `127.0.0.1`
+3. Check firewall allows traffic on port 31415
+
 ---
 
 ## Compatibility
@@ -406,8 +419,6 @@ Restart Hermes after adding the MCP server: `hermes restart`
 ---
 
 ## Credits
-
-Built for the [Patoko](https://github.com/patoko92) infrastructure.
 
 Inspired by [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp) — redesigned with a bridge architecture for reliability and self-hosted deployment.
 
