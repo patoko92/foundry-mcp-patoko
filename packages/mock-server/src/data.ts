@@ -9,6 +9,10 @@ import type {
   FoundryScene,
   FoundryCombat,
   FoundryJournal,
+  FoundryMacro,
+  FoundryActiveEffect,
+  FoundryFolder,
+  FoundryRollTable,
   WorldInfo,
   CompendiumResult,
   ModuleInfoMessage,
@@ -21,6 +25,7 @@ export const ACTOR_IDS = {
   kaelith: 'actor_kaelith_001',
   thrain: 'actor_thrain_002',
   lyra: 'actor_lyra_003',
+  goblinBoss: 'actor_goblinBoss_005',
 } as const;
 
 // ============================================================
@@ -31,6 +36,7 @@ export const TOKEN_IDS = {
   thrain: 'tok_thrain_002',
   lyra: 'tok_lyra_003',
   barkeeper: 'tok_barkeep_004',
+  goblinBoss: 'tok_goblinBoss_006',
 } as const;
 
 // ============================================================
@@ -39,6 +45,16 @@ export const TOKEN_IDS = {
 export const SCENE_IDS = {
   tavern: 'scene_tavern_001',
   forest: 'scene_forest_002',
+} as const;
+
+// ============================================================
+// User IDs
+// ============================================================
+export const USER_IDS = {
+  gm: 'user_gm_001',
+  sarah: 'user_player_001',
+  marcus: 'user_player_002',
+  elena: 'user_player_003',
 } as const;
 
 // ============================================================
@@ -195,6 +211,53 @@ const kaelithItems = [
       rarity: 'common',
       weight: 2,
       price: { value: 25, denomination: 'gp' },
+    },
+  },
+  {
+    _id: 'item_healingPotion_001',
+    name: 'Potion of Healing',
+    type: 'consumable',
+    img: 'systems/dnd5e/icons/items/potions/potion-red.webp',
+    system: {
+      uses: { value: 2, max: 2, per: null },
+      activation: { type: 'action', cost: 1 },
+      damage: { parts: [['2d4+2', 'healing']] },
+      rarity: 'common',
+      weight: 0.5,
+      price: { value: 50, denomination: 'gp' },
+      description: { value: '<p>You regain 2d4 + 2 hit points when you drink this potion.</p>' },
+    },
+  },
+  {
+    _id: 'item_scrollFireball_001',
+    name: 'Scroll of Fireball',
+    type: 'consumable',
+    img: 'systems/dnd5e/icons/items/scrolls/scroll-fire.webp',
+    system: {
+      level: 3,
+      school: 'evo',
+      activation: { type: 'action', cost: 1 },
+      uses: { value: 1, max: 1, per: null },
+      rarity: 'uncommon',
+      weight: 0,
+      price: { value: 200, denomination: 'gp' },
+      description: { value: '<p>A scroll inscribed with the Fireball spell. Casting the scroll consumes it.</p>' },
+    },
+  },
+  {
+    _id: 'item_scrollMistyStep_001',
+    name: 'Scroll of Misty Step',
+    type: 'consumable',
+    img: 'systems/dnd5e/icons/items/scrolls/scroll-arcane.webp',
+    system: {
+      level: 2,
+      school: 'con',
+      activation: { type: 'bonus', cost: 1 },
+      uses: { value: 1, max: 1, per: null },
+      rarity: 'uncommon',
+      weight: 0,
+      price: { value: 150, denomination: 'gp' },
+      description: { value: '<p>Briefly surrounded by silvery mist, you teleport up to 30 feet to an unoccupied space that you can see.</p>' },
     },
   },
 ];
@@ -742,8 +805,8 @@ export const COMBAT: FoundryCombat = {
     {
       _id: 'combatant_004',
       name: 'Goblin Boss',
-      tokenId: 'tok_goblinBoss_006',
-      actorId: 'actor_goblinBoss_005',
+      tokenId: TOKEN_IDS.goblinBoss,
+      actorId: ACTOR_IDS.goblinBoss,
       initiative: 12,
       hidden: false,
     },
@@ -1005,6 +1068,161 @@ export const MODULE_INFO: ModuleInfoMessage = {
     connectedAt: new Date().toISOString(),
   },
 };
+
+// ============================================================
+// Macros
+// ============================================================
+
+export const MACROS: FoundryMacro[] = [
+  {
+    _id: 'macro_initiative_001',
+    name: 'Show Initiative',
+    type: 'script',
+    command: `// Display initiative order for the current combat
+const combat = game.combat;
+if (!combat) return ui.notifications.warn("No active combat");
+const html = combat.combatants.map(c => \`\${c.name}: \${c.initiative}\`).join('<br>');
+new Dialog({ title: "Initiative Order", content: html, buttons: { ok: { label: "Close" } } }).render(true);`,
+    author: 'user_gm_001',
+  },
+  {
+    _id: 'macro_healAll_001',
+    name: 'Heal All',
+    type: 'script',
+    command: `// Heal all player characters to full HP
+for (const actor of game.actors.filter(a => a.type === 'character')) {
+  const hp = actor.system.attributes.hp;
+  await actor.update({ 'system.attributes.hp.value': hp.max });
+  ui.notifications.info(\`\${actor.name} healed to \${hp.max} HP\`);
+}`,
+    author: 'user_gm_001',
+  },
+  {
+    _id: 'macro_weather_001',
+    name: 'Weather Check',
+    type: 'script',
+    command: `// Roll for random weather
+const weathers = ['Clear skies', 'Overcast', 'Light rain', 'Heavy rain', 'Thunderstorm', 'Fog', 'Snow', 'Strong wind'];
+const roll = Math.floor(Math.random() * weathers.length);
+ChatMessage.create({ content: \`🌤 Weather: \${weathers[roll]}\`, speaker: { alias: "Weather" } });`,
+    author: 'user_gm_001',
+  },
+];
+
+// ============================================================
+// Active Effects (for Kaelith)
+// ============================================================
+
+export const EFFECTS: FoundryActiveEffect[] = [
+  {
+    _id: 'effect_mageArmor_001',
+    name: 'Mage Armor',
+    icon: 'systems/dnd5e/icons/spells/protect-blue-3.jpg',
+    disabled: false,
+    duration: { startTime: null, seconds: 28800, rounds: null, turns: null, startRound: null, startTurn: null },
+    changes: [
+      { key: 'system.attributes.ac.value', mode: 2, value: '+3' },
+    ],
+  },
+  {
+    _id: 'effect_bless_001',
+    name: 'Bless',
+    icon: 'systems/dnd5e/icons/spells/haste-blue-2.jpg',
+    disabled: false,
+    duration: { startTime: null, seconds: 60, rounds: 10, turns: null, startRound: 1, startTurn: null },
+    changes: [
+      { key: 'system.bonuses.mwak.attack', mode: 2, value: '1d4' },
+      { key: 'system.bonuses.rwak.attack', mode: 2, value: '1d4' },
+      { key: 'system.bonuses.msak.attack', mode: 2, value: '1d4' },
+      { key: 'system.bonuses.abilities.save', mode: 2, value: '1d4' },
+    ],
+  },
+];
+
+// ============================================================
+// Folders
+// ============================================================
+
+export const FOLDERS: FoundryFolder[] = [
+  {
+    _id: 'folder_pcs_001',
+    name: 'PCs',
+    type: 'Actor',
+    parent: null,
+    children: [ACTOR_IDS.kaelith, ACTOR_IDS.thrain, ACTOR_IDS.lyra],
+  },
+  {
+    _id: 'folder_npcs_002',
+    name: 'NPCs',
+    type: 'Actor',
+    parent: null,
+    children: [],
+  },
+  {
+    _id: 'folder_monsters_003',
+    name: 'Monsters',
+    type: 'Actor',
+    parent: null,
+    children: [ACTOR_IDS.goblinBoss],
+  },
+  {
+    _id: 'folder_notes_004',
+    name: 'Campaign Notes',
+    type: 'JournalEntry',
+    parent: null,
+    children: ['journal_quest_001', 'journal_notes_001', 'journal_npc_001'],
+  },
+];
+
+// ============================================================
+// Roll Tables
+// ============================================================
+
+export const ROLL_TABLES: FoundryRollTable[] = [
+  {
+    _id: 'table_encounters_001',
+    name: 'Random Encounters',
+    description: 'Random wilderness encounters for the World in Ember campaign.',
+    results: [
+      { _id: 'result_001', text: 'A lone merchant with a broken wagon wheel, desperate for help.', type: 0, range: [1, 10] },
+      { _id: 'result_002', text: 'A pack of wolves stalking the party from the treeline.', type: 0, range: [11, 25] },
+      { _id: 'result_003', text: 'An ancient stone shrine overgrown with moss, humming faintly with magic.', type: 0, range: [26, 40] },
+      { _id: 'result_004', text: 'A group of goblin scouts — roll perception to spot them first.', type: 0, range: [41, 60] },
+      { _id: 'result_005', text: 'A mysterious fog rolls in, obscuring vision beyond 30 feet.', type: 0, range: [61, 80] },
+      { _id: 'result_006', text: 'The ground trembles — remnants of the ancient evil stirring below.', type: 0, range: [81, 100] },
+    ],
+  },
+];
+
+// ============================================================
+// Scene Notes (Journal entries attached to scenes)
+// ============================================================
+
+export const SCENE_NOTES: FoundryJournal[] = [
+  {
+    _id: 'journal_tavernDesc_001',
+    name: 'Tavern Description',
+    content: `<h1>Tavern zur Goldenen Krone</h1>
+<p>A warm, inviting tavern with low oak beams and the smell of roasted meat. The barkeeper, Hilde, is a stout woman with a booming laugh. Regulars include a few off-duty guards and traveling merchants.</p>
+<h2>Notable Details</h2>
+<ul>
+<li>A notice board near the entrance has various quest postings</li>
+<li>A mysterious hooded figure sits in the far corner — Magister Orvyn's agent</li>
+<li>The floorboards near the hearth are loose — a small cache is hidden beneath</li>
+</ul>`,
+  },
+  {
+    _id: 'journal_sceneNPCs_001',
+    name: 'Important NPCs',
+    content: `<h1>Tavern NPCs</h1>
+<h2>Barkeeper Hilde</h2>
+<p>A gregarious woman who hears everything. Can be bribed for information (5gp).</p>
+<h2>Mysterious Hooded Figure</h2>
+<p>Actually Korrin, one of Orvyn's agents. Will approach the party if they seem trustworthy.</p>
+<h2>Off-duty Guard (Erik)</h2>
+<p>Knows about the goblin raids in the area. Worried about the forest road.`,
+  },
+];
 
 // ============================================================
 // Dice roll mock result
