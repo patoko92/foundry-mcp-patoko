@@ -4,11 +4,11 @@
 
 **A custom MCP (Model Context Protocol) server bridging Foundry VTT to AI assistants via WebSocket.**
 
-51 tools · TypeScript · Fully self-hosted · Zero cloud dependencies
+66 tools · TypeScript · Fully self-hosted · Zero cloud dependencies
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Foundry: v13+](https://img.shields.io/badge/Foundry%20VTT-v13%2B-orange.svg)](https://foundryvtt.com/)
-[![Tools: 51](https://img.shields.io/badge/Tools-51-green.svg)](#tools)
+[![Tools: 51](https://img.shields.io/badge/Tools-66-green.svg)](#tools)
 
 </div>
 
@@ -20,7 +20,7 @@ Foundry MCP connects [Foundry VTT](https://foundryvtt.com/) to any MCP-compatibl
 
 ### Key Features
 
-- **51 MCP tools** covering actors, scenes, combat, tokens, compendium, journals, macros, active effects, folders, rollable tables, and chat
+- **66 MCP tools** covering actors, scenes, combat, tokens, compendium, journals, macros, active effects, folders, rollable tables, and chat
 - **Fully self-hosted** — no cloud relay, no external accounts required
 - **Bridge architecture** — runs a local WebSocket relay; no server-side Foundry modules needed
 - **Mock mode** for development and testing without a live Foundry session
@@ -158,7 +158,7 @@ Restart Hermes: `hermes restart`
 
 1. Open Foundry VTT as a **GM** in your browser
 2. The module auto-connects to the Bridge Server
-3. Your AI assistant now has access to all 51 tools
+3. Your AI assistant now has access to all 66 tools
 
 ---
 
@@ -298,7 +298,7 @@ Restart Hermes: `hermes restart`
 foundry-mcp-patoko/
 ├── packages/
 │   ├── mcp-server/          # MCP Server (stdio transport)
-│   │   └── src/tools/       # 18 tool files, 51 tools
+│   │   └── src/tools/       # 20 tool files, 66 tools
 │   ├── foundry-module/      # Foundry VTT client module
 │   │   └── src/             # Query handlers, WS client, settings
 │   ├── bridge-server/       # WebSocket relay server

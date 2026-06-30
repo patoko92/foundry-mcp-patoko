@@ -1,8 +1,8 @@
 {
   "name": "foundry-mcp-patoko",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Custom MCP server for Foundry VTT — Patoko infrastructure",
+  "description": "Custom MCP server for Foundry VTT \u2014 Patoko infrastructure",
   "workspaces": [
     "packages/shared",
     "packages/mcp-server",
