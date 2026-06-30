@@ -8,6 +8,9 @@ const WRITE_METHODS = new Set([
   'createActor',
   'updateActor',
   'switchScene',
+  'createScene',
+  'activateScene',
+  'updateScene',
   'createJournal',
   'moveToken',
   'updateActorHp',
@@ -107,6 +110,9 @@ const methodMap: Record<string, MethodHandler> = {
   listScenes,
   getCurrentScene,
   switchScene,
+  createScene,
+  activateScene,
+  updateScene,
   searchCompendium,
   getCompendiumItem,
   listCompendiumPacks,
@@ -458,6 +464,102 @@ async function switchScene(
 
   await scene.view();
   return success({ _id: id, msg: 'Scene activated' });
+}
+
+
+async function createScene(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const name = args.name as string;
+    if (!name) return error('name is required');
+
+    const width = (args.width as number) || 4000;
+    const height = (args.height as number) || 3000;
+    const gridSize = (args.gridSize as number) || 100;
+    const gridType = (args.gridType as number) ?? 0;
+    const gridDistance = (args.gridDistance as number) ?? 5;
+    const gridUnits = (args.gridUnits as string) || 'ft';
+    const background = args.background as string | undefined;
+
+    const sceneData: Record<string, any> = {
+      name,
+      width,
+      height,
+      grid: {
+        size: gridSize,
+        type: gridType,
+        distance: gridDistance,
+        units: gridUnits,
+      },
+    };
+
+    if (background) {
+      sceneData.background = { src: background };
+    }
+
+    const scene = await Scene.create(sceneData);
+    if (!scene) return error('Failed to create scene');
+
+    return success({
+      _id: scene.id,
+      name: scene.name,
+      active: scene.active,
+      width: scene.width,
+      height: scene.height,
+      msg: 'Scene created successfully',
+    });
+  } catch (err) {
+    return error(`Failed to create scene: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function activateScene(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const sceneId = args.sceneId as string;
+    if (!sceneId) return error('sceneId is required');
+
+    const scene = game.scenes.get(sceneId);
+    if (!scene) return error(`Scene not found: ${sceneId}`);
+
+    await scene.activate();
+
+    return success({
+      _id: scene.id,
+      name: scene.name,
+      active: true,
+      msg: 'Scene activated for all players',
+    });
+  } catch (err) {
+    return error(`Failed to activate scene: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function updateScene(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const id = args.id as string;
+    const data = args.data as Record<string, unknown>;
+
+    if (!id) return error('id is required');
+    if (!data) return error('data is required');
+
+    const scene = game.scenes.get(id);
+    if (!scene) return error(`Scene not found: ${id}`);
+
+    await scene.update(data);
+
+    return success({
+      _id: scene.id,
+      name: scene.name,
+      msg: 'Scene updated successfully',
+    });
+  } catch (err) {
+    return error(`Failed to update scene: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // ─── Compendiums ────────────────────────────────────────────────────

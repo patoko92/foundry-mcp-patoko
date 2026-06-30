@@ -150,6 +150,28 @@ export interface SwitchSceneArgs {
   id: string;
 }
 
+export interface CreateSceneArgs {
+  name: string;
+  width?: number;
+  height?: number;
+  background?: string;
+  gridSize?: number;
+  gridType?: number;
+  gridDistance?: number;
+  gridUnits?: string;
+}
+
+export interface ActivateSceneArgs {
+  sceneId: string;
+}
+
+export interface UpdateSceneArgs {
+  id: string;
+  data: Record<string, unknown>;
+}
+
+
+
 export interface RollDiceArgs {
   formula: string;
   flavor?: string;

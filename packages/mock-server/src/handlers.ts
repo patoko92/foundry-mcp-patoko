@@ -322,6 +322,44 @@ const handlers: Record<string, HandlerFn> = {
     return [textContent({ success: true, message: `Activated scene: ${scene.name}`, sceneId: id })];
   },
 
+
+  'create-scene': (args) => {
+    const name = args.name as string;
+    const width = (args.width as number) || 4000;
+    const height = (args.height as number) || 3000;
+    const gridSize = (args.gridSize as number) || 100;
+    return [textContent({
+      success: true,
+      scene: {
+        _id: 'scene_' + Date.now(),
+        name,
+        active: false,
+        width,
+        height,
+        grid: { size: gridSize, distance: (args.gridDistance as number) || 5, units: (args.gridUnits as string) || 'ft' },
+      },
+    })];
+  },
+
+  'activate-scene': (args) => {
+    const sceneId = args.sceneId as string;
+    const scene = SCENES.find(s => s._id === sceneId);
+    if (!scene) {
+      return [textContent({ error: `Scene not found: ${sceneId}` })];
+    }
+    return [textContent({ success: true, _id: sceneId, name: scene.name, active: true, msg: 'Scene activated' })];
+  },
+
+  'update-scene': (args) => {
+    const id = args.id as string;
+    const data = args.data as Record<string, unknown>;
+    const scene = SCENES.find(s => s._id === id);
+    if (!scene) {
+      return [textContent({ error: `Scene not found: ${id}` })];
+    }
+    return [textContent({ success: true, _id: id, name: scene.name, updatedFields: Object.keys(data), msg: 'Scene updated' })];
+  },
+
   // ── Combat ────────────────────────────────────────────────
 
   'get-combat-state': (_args) => {
