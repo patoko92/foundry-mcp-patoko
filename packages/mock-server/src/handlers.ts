@@ -503,6 +503,60 @@ const handlers: Record<string, HandlerFn> = {
     })];
   },
 
+
+  'place-token': (args) => {
+    const actorId = args.actorId as string;
+    const x = args.x as number;
+    const y = args.y as number;
+    const name = args.name as string | undefined;
+    const actor = ACTORS.find(a => a._id === actorId);
+    return [textContent({
+      success: true,
+      tokenId: 'token_' + Date.now(),
+      name: name || actor?.name || 'Unknown',
+      x,
+      y,
+      msg: 'Token placed successfully',
+    })];
+  },
+
+  'place-token-grid': (args) => {
+    const actorId = args.actorId as string;
+    const gridX = args.gridX as number;
+    const gridY = args.gridY as number;
+    const name = args.name as string | undefined;
+    const actor = ACTORS.find(a => a._id === actorId);
+    const gridSize = 100;
+    return [textContent({
+      success: true,
+      tokenId: 'token_' + Date.now(),
+      name: name || actor?.name || 'Unknown',
+      gridX,
+      gridY,
+      x: gridX * gridSize + gridSize / 2,
+      y: gridY * gridSize + gridSize / 2,
+      gridSize,
+      msg: `Placed at grid (${gridX}, ${gridY})`,
+    })];
+  },
+
+  'move-token-grid': (args) => {
+    const tokenId = args.tokenId as string;
+    const gridX = args.gridX as number;
+    const gridY = args.gridY as number;
+    const gridSize = 100;
+    return [textContent({
+      success: true,
+      tokenId,
+      gridX,
+      gridY,
+      x: gridX * gridSize + gridSize / 2,
+      y: gridY * gridSize + gridSize / 2,
+      gridSize,
+      msg: `Moved to grid (${gridX}, ${gridY})`,
+    })];
+  },
+
   // ── Journals ──────────────────────────────────────────────
 
   'search-journals': (args) => {

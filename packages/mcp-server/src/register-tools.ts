@@ -11,6 +11,7 @@ import { registerDiceTools } from './tools/dice.js';
 import { registerJournalTools } from './tools/journals.js';
 import { registerTokenTools } from './tools/tokens.js';
 import { registerTokenExtendedTools } from './tools/tokens-extended.js';
+import { registerTokenPlacementTools } from './tools/tokens-placement.js';
 import { registerChatTools } from './tools/chat.js';
 import { registerOwnershipTools } from './tools/ownership.js';
 import { registerMacroTools } from './tools/macros.js';
@@ -34,6 +35,7 @@ export function registerAllTools(server: McpServer, client: IFoundryClient): voi
   registerJournalTools(server, client);
   registerTokenTools(server, client);
   registerTokenExtendedTools(server, client);
+  registerTokenPlacementTools(server, client);
   registerChatTools(server, client);
   registerOwnershipTools(server, client);
   registerMacroTools(server, client);

@@ -204,6 +204,31 @@ export interface GetTokenDetailsArgs {
   sceneId?: string;
 }
 
+export interface PlaceTokenArgs {
+  actorId: string;
+  sceneId?: string;
+  x: number;
+  y: number;
+  name?: string;
+  scale?: number;
+}
+
+export interface PlaceTokenGridArgs {
+  actorId: string;
+  sceneId?: string;
+  gridX: number;
+  gridY: number;
+  name?: string;
+}
+
+export interface MoveTokenGridArgs {
+  tokenId: string;
+  gridX: number;
+  gridY: number;
+}
+
+
+
 // Actor Extended
 export interface GetActorItemsArgs {
   actorId: string;
