@@ -92,6 +92,60 @@ const handlers: Record<string, HandlerFn> = {
     }
     return [textContent({ success: true, message: `Actor ${actor.name} updated`, data: args.data })];
   },
+  'list-player-characters': (_args) => {
+    const users: Record<string, string> = {
+      [USER_IDS.gm]: 'Gamemaster',
+      [USER_IDS.sarah]: 'Sarah',
+      [USER_IDS.marcus]: 'Marcus',
+      [USER_IDS.elena]: 'Elena',
+    };
+    const characters = ACTORS.filter(a => a.type === 'character');
+    return [textContent(characters.map(c => {
+      const ownership = (c as any).ownership || {};
+      const ownerId = Object.keys(ownership).find(id => ownership[id] === 3 && users[id]);
+      return {
+        id: c._id,
+        name: c.name,
+        owner: ownerId ? users[ownerId] : null,
+        hp: (c.system as any)?.attributes?.hp ?? null,
+        level: (c.system as any)?.details?.level ?? null,
+        sharedWith: [],
+      };
+    }))];
+  },
+
+  'get-world-users': (_args) => {
+    return [textContent([
+      { id: USER_IDS.gm, name: 'Gamemaster', role: 'gamemaster', active: true, isGM: true },
+      { id: USER_IDS.sarah, name: 'Sarah', role: 'player', active: false, isGM: false },
+      { id: USER_IDS.marcus, name: 'Marcus', role: 'player', active: false, isGM: false },
+      { id: USER_IDS.elena, name: 'Elena', role: 'player', active: false, isGM: false },
+    ])];
+  },
+
+  'delete-actor': (args) => {
+    const actorId = args.actorId as string;
+    const actor = ACTORS.find(a => a._id === actorId);
+    if (!actor) {
+      return [textContent({ error: `Actor not found: ${actorId}` })];
+    }
+    return [textContent({ success: true, deleted: true, actorId, name: actor.name })];
+  },
+
+  'delete-actors-by-type': (args) => {
+    const actorType = args.actorType as string | undefined;
+    const excludeTypes = args.excludeTypes as string[] | undefined;
+    let actors = ACTORS;
+    if (actorType) {
+      actors = actors.filter(a => a.type === actorType);
+    }
+    if (excludeTypes?.length) {
+      actors = actors.filter(a => !excludeTypes.includes(a.type));
+    }
+    return [textContent({ success: true, count: actors.length, deleted: actors.map(a => a.name) })];
+  },
+
+
 
   // ── Actor Extended ────────────────────────────────────────
 

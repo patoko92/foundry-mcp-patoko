@@ -55,4 +55,14 @@ export function registerActorTools(server: McpServer, client: IFoundryClient): v
       return { content };
     }
   );
+
+  server.tool(
+    'list-player-characters',
+    'List all player characters (actors of type character) with their owner info, HP, and level. Compact summary — much lighter than list-actors for this specific query.',
+    {},
+    async () => {
+      const content = await client.callMethod('list-player-characters', {});
+      return { content };
+    }
+  );
 }

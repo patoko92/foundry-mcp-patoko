@@ -15,6 +15,8 @@ const WRITE_METHODS = new Set([
   'removeItemFromActor',
   'updateToken',
   'deleteTokens',
+  'deleteActor',
+  'deleteActorsByType',
   'toggleTokenCondition',
   'startCombat',
   'endCombat',
@@ -116,6 +118,11 @@ const methodMap: Record<string, MethodHandler> = {
   listTokens,
   getTokenDetails,
   moveToken,
+  // Actor Queries
+  listPlayerCharacters,
+  getWorldUsers,
+  deleteActor,
+  deleteActorsByType,
   // Actor Extended
   getActorItems,
   getActorSpells,
@@ -289,6 +296,109 @@ async function updateActor(
 
   await actor.update(data);
   return success({ _id: id, msg: 'Actor updated successfully' });
+}
+
+// ─── Actor Queries ──────────────────────────────────────────────────
+
+async function listPlayerCharacters(): Promise<QueryResult> {
+  try {
+    const users = game.users.reduce((map: Record<string, string>, u: any) => {
+      map[u.id] = u.name;
+      return map;
+    }, {} as Record<string, string>);
+
+    const characters = game.actors.filter((a: any) => a.type === 'character');
+
+    return success(
+      characters.map((c: any) => {
+        const ownership = c.ownership ?? {};
+        const ownerId = Object.keys(ownership).find(
+          (id) => ownership[id] === 3 && users[id] && id !== game.user?.id
+        );
+        const sharedWith = Object.entries(ownership)
+          .filter(([id, level]) => users[id] && (level as number) >= 2 && id !== ownerId && id !== game.user?.id)
+          .map(([id]) => users[id]);
+
+        return {
+          id: c.id,
+          name: c.name,
+          owner: ownerId ? users[ownerId] : null,
+          hp: c.system?.attributes?.hp ?? null,
+          level: c.system?.details?.level ?? null,
+          sharedWith,
+        };
+      })
+    );
+  } catch (err) {
+    return error(`Failed to list player characters: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function getWorldUsers(): Promise<QueryResult> {
+  try {
+    const roleNames: Record<number, string> = {
+      0: 'player',
+      1: 'player',
+      2: 'trusted',
+      3: 'assistant',
+      4: 'gamemaster',
+    };
+
+    return success(
+      game.users.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        role: roleNames[u.role] || 'unknown',
+        active: u.active,
+        isGM: u.isGM,
+      }))
+    );
+  } catch (err) {
+    return error(`Failed to get world users: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function deleteActor(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorId = args.actorId as string;
+    if (!actorId) return error('actorId is required');
+
+    const actor = game.actors.get(actorId);
+    if (!actor) return error(`Actor not found: ${actorId}`);
+
+    const name = actor.name;
+    await actor.delete();
+
+    return success({ deleted: true, actorId, name });
+  } catch (err) {
+    return error(`Failed to delete actor: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function deleteActorsByType(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorType = args.actorType as string | undefined;
+    const excludeTypes = args.excludeTypes as string[] | undefined;
+
+    const actors = game.actors.filter((a: any) => {
+      if (excludeTypes?.includes(a.type)) return false;
+      return actorType ? a.type === actorType : true;
+    });
+
+    const deleted: string[] = [];
+    for (const a of actors) {
+      deleted.push(a.name);
+      await a.delete();
+    }
+
+    return success({ count: deleted.length, deleted });
+  } catch (err) {
+    return error(`Failed to delete actors by type: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // ─── Scenes ─────────────────────────────────────────────────────────
@@ -1662,3 +1772,5 @@ async function getSceneNotes(
     return error(`Failed to get scene notes: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
+/usr/bin/bash: line 5: /tmp/hermes-snap-53d6eb49d7de.sh: No such file or directory
+/usr/bin/bash: line 6: /tmp/hermes-cwd-53d6eb49d7de.txt: No such file or directory

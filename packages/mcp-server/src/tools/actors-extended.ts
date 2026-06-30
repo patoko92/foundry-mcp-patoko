@@ -70,4 +70,29 @@ export function registerActorExtendedTools(server: McpServer, client: IFoundryCl
       return { content };
     }
   );
+
+  server.tool(
+    'delete-actor',
+    'Delete an actor from the world by ID.',
+    {
+      actorId: z.string().describe('The _id of the actor to delete'),
+    },
+    async (args) => {
+      const content = await client.callMethod('delete-actor', args);
+      return { content };
+    }
+  );
+
+  server.tool(
+    'delete-actors-by-type',
+    'Delete all actors matching a type (e.g. npc) or excluding types (e.g. keep only character). Useful for batch cleanup.',
+    {
+      actorType: z.string().optional().describe('Actor type to delete (e.g. npc, character, vehicle)'),
+      excludeTypes: z.array(z.string()).optional().describe('Actor types to keep (skip deletion)'),
+    },
+    async (args) => {
+      const content = await client.callMethod('delete-actors-by-type', args);
+      return { content };
+    }
+  );
 }

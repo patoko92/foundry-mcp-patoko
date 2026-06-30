@@ -310,6 +310,20 @@ export interface GetSceneNotesArgs {
   sceneId?: string;
 }
 
+// Actor Queries
+export interface ListPlayerCharactersArgs {}
+
+export interface GetWorldUsersArgs {}
+
+export interface DeleteActorArgs {
+  actorId: string;
+}
+
+export interface DeleteActorsByTypeArgs {
+  actorType?: string;
+  excludeTypes?: string[];
+}
+
 // ============================================================
 // Foundry Data Types (simplified)
 // ============================================================

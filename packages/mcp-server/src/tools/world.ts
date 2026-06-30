@@ -12,4 +12,14 @@ export function registerWorldTools(server: McpServer, client: IFoundryClient): v
       return { content };
     }
   );
+
+  server.tool(
+    'get-world-users',
+    'List all registered users in the current Foundry world with their IDs, names, roles, and active status.',
+    {},
+    async () => {
+      const content = await client.callMethod('get-world-users', {});
+      return { content };
+    }
+  );
 }
