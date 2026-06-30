@@ -11,6 +11,7 @@ import { registerDiceTools } from './tools/dice.js';
 import { registerJournalTools } from './tools/journals.js';
 import { registerTokenTools } from './tools/tokens.js';
 import { registerTokenExtendedTools } from './tools/tokens-extended.js';
+import { registerTokenPlacementTools } from './tools/tokens-placement.js';
 import { registerChatTools } from './tools/chat.js';
 import { registerOwnershipTools } from './tools/ownership.js';
 import { registerMacroTools } from './tools/macros.js';
@@ -18,6 +19,7 @@ import { registerEffectTools } from './tools/effects.js';
 import { registerFolderTools } from './tools/folders.js';
 import { registerTableTools } from './tools/tables.js';
 import { registerSceneDrawingTools } from './tools/scene-drawing.js';
+import { registerWallTools } from './tools/walls.js';
 
 /**
  * Register all MCP tools on the server.
@@ -34,6 +36,7 @@ export function registerAllTools(server: McpServer, client: IFoundryClient): voi
   registerJournalTools(server, client);
   registerTokenTools(server, client);
   registerTokenExtendedTools(server, client);
+  registerTokenPlacementTools(server, client);
   registerChatTools(server, client);
   registerOwnershipTools(server, client);
   registerMacroTools(server, client);
@@ -41,6 +44,7 @@ export function registerAllTools(server: McpServer, client: IFoundryClient): voi
   registerFolderTools(server, client);
   registerTableTools(server, client);
   registerSceneDrawingTools(server, client);
+  registerWallTools(server, client);
 
   console.error('[register-tools] All tools registered');
 }

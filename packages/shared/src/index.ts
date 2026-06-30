@@ -150,6 +150,28 @@ export interface SwitchSceneArgs {
   id: string;
 }
 
+export interface CreateSceneArgs {
+  name: string;
+  width?: number;
+  height?: number;
+  background?: string;
+  gridSize?: number;
+  gridType?: number;
+  gridDistance?: number;
+  gridUnits?: string;
+}
+
+export interface ActivateSceneArgs {
+  sceneId: string;
+}
+
+export interface UpdateSceneArgs {
+  id: string;
+  data: Record<string, unknown>;
+}
+
+
+
 export interface RollDiceArgs {
   formula: string;
   flavor?: string;
@@ -181,6 +203,31 @@ export interface GetTokenDetailsArgs {
   tokenId: string;
   sceneId?: string;
 }
+
+export interface PlaceTokenArgs {
+  actorId: string;
+  sceneId?: string;
+  x: number;
+  y: number;
+  name?: string;
+  scale?: number;
+}
+
+export interface PlaceTokenGridArgs {
+  actorId: string;
+  sceneId?: string;
+  gridX: number;
+  gridY: number;
+  name?: string;
+}
+
+export interface MoveTokenGridArgs {
+  tokenId: string;
+  gridX: number;
+  gridY: number;
+}
+
+
 
 // Actor Extended
 export interface GetActorItemsArgs {
@@ -307,6 +354,67 @@ export interface RollTableArgs {
 
 // Scene Notes
 export interface GetSceneNotesArgs {
+  sceneId?: string;
+}
+
+// Actor Queries
+export interface ListPlayerCharactersArgs {}
+
+export interface GetWorldUsersArgs {}
+
+export interface DeleteActorArgs {
+  actorId: string;
+}
+
+export interface DeleteActorsByTypeArgs {
+  actorType?: string;
+  excludeTypes?: string[];
+}
+
+// Walls
+export interface CreateWallArgs {
+  sceneId?: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  door?: boolean;
+  doorState?: 'closed' | 'open' | 'locked';
+  movement?: number;
+  sight?: number;
+  light?: number;
+  direction?: number;
+}
+
+export interface CreateRoomArgs {
+  sceneId?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  doors?: Array<{
+    wall: 'top' | 'bottom' | 'left' | 'right';
+    position?: number;
+    doorState?: 'closed' | 'open' | 'locked';
+  }>;
+}
+
+export interface CreateWallGridArgs {
+  sceneId?: string;
+  gridX1: number;
+  gridY1: number;
+  gridX2: number;
+  gridY2: number;
+  door?: boolean;
+  doorState?: 'closed' | 'open' | 'locked';
+}
+
+export interface ListWallsArgs {
+  sceneId?: string;
+}
+
+export interface DeleteWallArgs {
+  wallId: string;
   sceneId?: string;
 }
 

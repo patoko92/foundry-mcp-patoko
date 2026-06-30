@@ -8,13 +8,21 @@ const WRITE_METHODS = new Set([
   'createActor',
   'updateActor',
   'switchScene',
+  'createScene',
+  'activateScene',
+  'updateScene',
   'createJournal',
   'moveToken',
+  'placeToken',
+  'placeTokenGrid',
+  'moveTokenGrid',
   'updateActorHp',
   'addItemToActor',
   'removeItemFromActor',
   'updateToken',
   'deleteTokens',
+  'deleteActor',
+  'deleteActorsByType',
   'toggleTokenCondition',
   'startCombat',
   'endCombat',
@@ -33,6 +41,10 @@ const WRITE_METHODS = new Set([
   'removeEffectFromActor',
   'createFolder',
   'rollTable',
+  'createWall',
+  'createRoom',
+  'createWallGrid',
+  'deleteWall',
 ]);
 
 export interface QueryResult {
@@ -105,6 +117,9 @@ const methodMap: Record<string, MethodHandler> = {
   listScenes,
   getCurrentScene,
   switchScene,
+  createScene,
+  activateScene,
+  updateScene,
   searchCompendium,
   getCompendiumItem,
   listCompendiumPacks,
@@ -116,6 +131,11 @@ const methodMap: Record<string, MethodHandler> = {
   listTokens,
   getTokenDetails,
   moveToken,
+  // Actor Queries
+  listPlayerCharacters,
+  getWorldUsers,
+  deleteActor,
+  deleteActorsByType,
   // Actor Extended
   getActorItems,
   getActorSpells,
@@ -157,6 +177,12 @@ const methodMap: Record<string, MethodHandler> = {
   rollTable,
   // Scene Notes
   getSceneNotes,
+  // Walls
+  createWall,
+  createRoom,
+  createWallGrid,
+  listWalls,
+  deleteWall,
 };
 
 // ─── World Info ─────────────────────────────────────────────────────
@@ -291,6 +317,109 @@ async function updateActor(
   return success({ _id: id, msg: 'Actor updated successfully' });
 }
 
+// ─── Actor Queries ──────────────────────────────────────────────────
+
+async function listPlayerCharacters(): Promise<QueryResult> {
+  try {
+    const users = game.users.reduce((map: Record<string, string>, u: any) => {
+      map[u.id] = u.name;
+      return map;
+    }, {} as Record<string, string>);
+
+    const characters = game.actors.filter((a: any) => a.type === 'character');
+
+    return success(
+      characters.map((c: any) => {
+        const ownership = c.ownership ?? {};
+        const ownerId = Object.keys(ownership).find(
+          (id) => ownership[id] === 3 && users[id] && id !== game.user?.id
+        );
+        const sharedWith = Object.entries(ownership)
+          .filter(([id, level]) => users[id] && (level as number) >= 2 && id !== ownerId && id !== game.user?.id)
+          .map(([id]) => users[id]);
+
+        return {
+          id: c.id,
+          name: c.name,
+          owner: ownerId ? users[ownerId] : null,
+          hp: c.system?.attributes?.hp ?? null,
+          level: c.system?.details?.level ?? null,
+          sharedWith,
+        };
+      })
+    );
+  } catch (err) {
+    return error(`Failed to list player characters: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function getWorldUsers(): Promise<QueryResult> {
+  try {
+    const roleNames: Record<number, string> = {
+      0: 'player',
+      1: 'player',
+      2: 'trusted',
+      3: 'assistant',
+      4: 'gamemaster',
+    };
+
+    return success(
+      game.users.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        role: roleNames[u.role] || 'unknown',
+        active: u.active,
+        isGM: u.isGM,
+      }))
+    );
+  } catch (err) {
+    return error(`Failed to get world users: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function deleteActor(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorId = args.actorId as string;
+    if (!actorId) return error('actorId is required');
+
+    const actor = game.actors.get(actorId);
+    if (!actor) return error(`Actor not found: ${actorId}`);
+
+    const name = actor.name;
+    await actor.delete();
+
+    return success({ deleted: true, actorId, name });
+  } catch (err) {
+    return error(`Failed to delete actor: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function deleteActorsByType(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorType = args.actorType as string | undefined;
+    const excludeTypes = args.excludeTypes as string[] | undefined;
+
+    const actors = game.actors.filter((a: any) => {
+      if (excludeTypes?.includes(a.type)) return false;
+      return actorType ? a.type === actorType : true;
+    });
+
+    const deleted: string[] = [];
+    for (const a of actors) {
+      deleted.push(a.name);
+      await a.delete();
+    }
+
+    return success({ count: deleted.length, deleted });
+  } catch (err) {
+    return error(`Failed to delete actors by type: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 // ─── Scenes ─────────────────────────────────────────────────────────
 
 async function listScenes(): Promise<QueryResult> {
@@ -348,6 +477,102 @@ async function switchScene(
 
   await scene.view();
   return success({ _id: id, msg: 'Scene activated' });
+}
+
+
+async function createScene(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const name = args.name as string;
+    if (!name) return error('name is required');
+
+    const width = (args.width as number) || 4000;
+    const height = (args.height as number) || 3000;
+    const gridSize = (args.gridSize as number) || 100;
+    const gridType = (args.gridType as number) ?? 0;
+    const gridDistance = (args.gridDistance as number) ?? 5;
+    const gridUnits = (args.gridUnits as string) || 'ft';
+    const background = args.background as string | undefined;
+
+    const sceneData: Record<string, any> = {
+      name,
+      width,
+      height,
+      grid: {
+        size: gridSize,
+        type: gridType,
+        distance: gridDistance,
+        units: gridUnits,
+      },
+    };
+
+    if (background) {
+      sceneData.background = { src: background };
+    }
+
+    const scene = await Scene.create(sceneData);
+    if (!scene) return error('Failed to create scene');
+
+    return success({
+      _id: scene.id,
+      name: scene.name,
+      active: scene.active,
+      width: scene.width,
+      height: scene.height,
+      msg: 'Scene created successfully',
+    });
+  } catch (err) {
+    return error(`Failed to create scene: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function activateScene(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const sceneId = args.sceneId as string;
+    if (!sceneId) return error('sceneId is required');
+
+    const scene = game.scenes.get(sceneId);
+    if (!scene) return error(`Scene not found: ${sceneId}`);
+
+    await scene.activate();
+
+    return success({
+      _id: scene.id,
+      name: scene.name,
+      active: true,
+      msg: 'Scene activated for all players',
+    });
+  } catch (err) {
+    return error(`Failed to activate scene: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function updateScene(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const id = args.id as string;
+    const data = args.data as Record<string, unknown>;
+
+    if (!id) return error('id is required');
+    if (!data) return error('data is required');
+
+    const scene = game.scenes.get(id);
+    if (!scene) return error(`Scene not found: ${id}`);
+
+    await scene.update(data);
+
+    return success({
+      _id: scene.id,
+      name: scene.name,
+      msg: 'Scene updated successfully',
+    });
+  } catch (err) {
+    return error(`Failed to update scene: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // ─── Compendiums ────────────────────────────────────────────────────
@@ -1662,3 +1887,265 @@ async function getSceneNotes(
     return error(`Failed to get scene notes: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
+
+
+// ─── Walls ──────────────────────────────────────────────────────────
+
+async function createWall(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const sceneId = args.sceneId as string | undefined;
+    const x1 = args.x1 as number;
+    const y1 = args.y1 as number;
+    const x2 = args.x2 as number;
+    const y2 = args.y2 as number;
+    const door = (args.door as boolean) ?? false;
+    const doorState = args.doorState as string | undefined;
+    const movement = (args.movement as number) ?? 1;
+    const sight = (args.sight as number) ?? 1;
+    const light = (args.light as number) ?? 1;
+    const direction = (args.direction as number) ?? 0;
+
+    if (x1 === undefined || y1 === undefined || x2 === undefined || y2 === undefined) {
+      return error('x1, y1, x2, y2 are required');
+    }
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No active scene');
+
+    const wallData: Record<string, any> = {
+      c: [x1, y1, x2, y2],
+      door: door ? 1 : 0,
+      ds: door ? (doorState === 'locked' ? 2 : doorState === 'open' ? 1 : 0) : 0,
+      move: movement,
+      sense: sight,
+      light,
+      dir: direction,
+    };
+
+    const [wall] = await scene.createDocuments('Wall', [wallData]);
+    if (!wall) return error('Failed to create wall');
+
+    return success({
+      wallId: wall.id,
+      c: wall.c,
+      door: wall.door,
+      msg: 'Wall created successfully',
+    });
+  } catch (err) {
+    return error(`Failed to create wall: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function createRoom(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const sceneId = args.sceneId as string | undefined;
+    const gx = args.x as number;
+    const gy = args.y as number;
+    const width = args.width as number;
+    const height = args.height as number;
+    const doors = args.doors as Array<{
+      wall: string;
+      position?: number;
+      doorState?: string;
+    }> | undefined;
+
+    if (gx === undefined || gy === undefined || !width || !height) {
+      return error('x, y, width, height are required');
+    }
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No active scene');
+
+    const gs = scene.grid?.size ?? 100;
+    const px = (gridCoord: number) => gridCoord * gs + gs / 2;
+
+    const left = px(gx);
+    const right = px(gx + width);
+    const top = px(gy);
+    const bottom = px(gy + height);
+
+    const wallDocs: Record<string, any>[] = [
+      { c: [left, top, right, top], move: 1, sense: 1, light: 1 },       // top
+      { c: [left, bottom, right, bottom], move: 1, sense: 1, light: 1 }, // bottom
+      { c: [left, top, left, bottom], move: 1, sense: 1, light: 1 },     // left
+      { c: [right, top, right, bottom], move: 1, sense: 1, light: 1 },   // right
+    ];
+
+    // Add doors
+    if (doors?.length) {
+      for (const door of doors) {
+        const pos = door.position ?? 0.5;
+        let wx1: number, wy1: number, wx2: number, wy2: number;
+
+        switch (door.wall) {
+          case 'top':
+            wx1 = left + (right - left) * pos;
+            wy1 = top;
+            wx2 = wx1;
+            wy2 = top;
+            break;
+          case 'bottom':
+            wx1 = left + (right - left) * pos;
+            wy1 = bottom;
+            wx2 = wx1;
+            wy2 = bottom;
+            break;
+          case 'left':
+            wx1 = left;
+            wy1 = top + (bottom - top) * pos;
+            wx2 = left;
+            wy2 = wy1;
+            break;
+          case 'right':
+            wx1 = right;
+            wy1 = top + (bottom - top) * pos;
+            wx2 = right;
+            wy2 = wy1;
+            break;
+          default:
+            continue;
+        }
+
+        const ds = door.doorState === 'locked' ? 2 : door.doorState === 'open' ? 1 : 0;
+        wallDocs.push({
+          c: [wx1 - 5, wy1, wx2 + 5, wy2],
+          door: 1,
+          ds,
+          move: 1,
+          sense: 1,
+          light: 1,
+        });
+      }
+    }
+
+    const created = await scene.createDocuments('Wall', wallDocs);
+
+    return success({
+      count: created.length,
+      walls: created.map((w: any) => ({ id: w.id, c: w.c, door: w.door })),
+      msg: `Room created with ${created.length} wall(s)`,
+    });
+  } catch (err) {
+    return error(`Failed to create room: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function createWallGrid(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const sceneId = args.sceneId as string | undefined;
+    const gridX1 = args.gridX1 as number;
+    const gridY1 = args.gridY1 as number;
+    const gridX2 = args.gridX2 as number;
+    const gridY2 = args.gridY2 as number;
+    const door = (args.door as boolean) ?? false;
+    const doorState = args.doorState as string | undefined;
+
+    if (gridX1 === undefined || gridY1 === undefined || gridX2 === undefined || gridY2 === undefined) {
+      return error('gridX1, gridY1, gridX2, gridY2 are required');
+    }
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No active scene');
+
+    const gs = scene.grid?.size ?? 100;
+    const px = (gridCoord: number) => gridCoord * gs + gs / 2;
+
+    const x1 = px(gridX1);
+    const y1 = px(gridY1);
+    const x2 = px(gridX2);
+    const y2 = px(gridY2);
+
+    const wallData: Record<string, any> = {
+      c: [x1, y1, x2, y2],
+      door: door ? 1 : 0,
+      ds: door ? (doorState === 'locked' ? 2 : doorState === 'open' ? 1 : 0) : 0,
+      move: 1,
+      sense: 1,
+      light: 1,
+    };
+
+    const [wall] = await scene.createDocuments('Wall', [wallData]);
+    if (!wall) return error('Failed to create wall');
+
+    return success({
+      wallId: wall.id,
+      c: wall.c,
+      gridCoords: { gridX1, gridY1, gridX2, gridY2 },
+      gridSize: gs,
+      msg: `Wall created from grid (${gridX1},${gridY1}) to (${gridX2},${gridY2})`,
+    });
+  } catch (err) {
+    return error(`Failed to create wall from grid coords: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function listWalls(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const sceneId = args.sceneId as string | undefined;
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No active scene');
+
+    const walls = (scene.walls ?? []).map((w: any) => ({
+      _id: w.id,
+      c: w.c,
+      door: w.door,
+      ds: w.ds,
+      move: w.move,
+      sense: w.sense,
+      light: w.light,
+      dir: w.dir,
+    }));
+
+    return success({ sceneId: scene.id, sceneName: scene.name, totalWalls: walls.length, walls });
+  } catch (err) {
+    return error(`Failed to list walls: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function deleteWall(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const wallId = args.wallId as string;
+    const sceneId = args.sceneId as string | undefined;
+
+    if (!wallId) return error('wallId is required');
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No active scene');
+
+    await scene.deleteEmbeddedDocuments('Wall', [wallId]);
+
+    return success({ wallId, msg: 'Wall deleted successfully' });
+  } catch (err) {
+    return error(`Failed to delete wall: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+
+/usr/bin/bash: line 5: /tmp/hermes-snap-53d6eb49d7de.sh: No such file or directory
+/usr/bin/bash: line 6: /tmp/hermes-cwd-53d6eb49d7de.txt: No such file or directory

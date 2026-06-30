@@ -226,6 +226,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     // ---- MCP Query (from MCP client → forward to Foundry) ----
     if (type === 'mcp-query') {
       const queryId = msg.id as string;
+      const data = msg.data as Record<string, unknown> | undefined;
 
       if (!foundryClient) {
         log('warn', `Query ${queryId} from MCP but no Foundry module connected`);
@@ -237,10 +238,33 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         return;
       }
 
-      log('debug', `Forwarding query ${queryId} from MCP → Foundry: ${(msg.data as Record<string, unknown>)?.method}`);
+      // Validate query structure
+      if (!data || !data.method) {
+        log('warn', `Malformed mcp-query from ${clientId}: missing data.method`);
+        send(ws, {
+          type: 'mcp-error',
+          id: queryId,
+          data: { error: 'Malformed mcp-query: data.method is required. Expected: { type: "mcp-query", id: "...", data: { method: "...", args: {...} } }', code: 'MALFORMED_QUERY' },
+        });
+        return;
+      }
+
+      // Normalize: accept both 'args' and 'arguments' (MCP SDK uses 'arguments')
+      if (data.arguments && !data.args) {
+        log('debug', `Normalizing 'arguments' → 'args' for query ${queryId}`);
+        data.args = data.arguments;
+        delete data.arguments;
+      }
+
+      // Ensure args exists (default to empty object)
+      if (!data.args) {
+        data.args = {};
+      }
+
+      log('debug', `Forwarding query ${queryId} from MCP → Foundry: ${data.method}`);
       pendingQueries.set(queryId, { mcpClientId: clientId, queryId, sentAt: new Date() });
 
-      // Forward the query as-is to the Foundry module
+      // Forward the (potentially normalized) query to the Foundry module
       send(foundryClient.ws, msg);
       return;
     }

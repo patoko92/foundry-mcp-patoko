@@ -92,6 +92,60 @@ const handlers: Record<string, HandlerFn> = {
     }
     return [textContent({ success: true, message: `Actor ${actor.name} updated`, data: args.data })];
   },
+  'list-player-characters': (_args) => {
+    const users: Record<string, string> = {
+      [USER_IDS.gm]: 'Gamemaster',
+      [USER_IDS.sarah]: 'Sarah',
+      [USER_IDS.marcus]: 'Marcus',
+      [USER_IDS.elena]: 'Elena',
+    };
+    const characters = ACTORS.filter(a => a.type === 'character');
+    return [textContent(characters.map(c => {
+      const ownership = (c as any).ownership || {};
+      const ownerId = Object.keys(ownership).find(id => ownership[id] === 3 && users[id]);
+      return {
+        id: c._id,
+        name: c.name,
+        owner: ownerId ? users[ownerId] : null,
+        hp: (c.system as any)?.attributes?.hp ?? null,
+        level: (c.system as any)?.details?.level ?? null,
+        sharedWith: [],
+      };
+    }))];
+  },
+
+  'get-world-users': (_args) => {
+    return [textContent([
+      { id: USER_IDS.gm, name: 'Gamemaster', role: 'gamemaster', active: true, isGM: true },
+      { id: USER_IDS.sarah, name: 'Sarah', role: 'player', active: false, isGM: false },
+      { id: USER_IDS.marcus, name: 'Marcus', role: 'player', active: false, isGM: false },
+      { id: USER_IDS.elena, name: 'Elena', role: 'player', active: false, isGM: false },
+    ])];
+  },
+
+  'delete-actor': (args) => {
+    const actorId = args.actorId as string;
+    const actor = ACTORS.find(a => a._id === actorId);
+    if (!actor) {
+      return [textContent({ error: `Actor not found: ${actorId}` })];
+    }
+    return [textContent({ success: true, deleted: true, actorId, name: actor.name })];
+  },
+
+  'delete-actors-by-type': (args) => {
+    const actorType = args.actorType as string | undefined;
+    const excludeTypes = args.excludeTypes as string[] | undefined;
+    let actors = ACTORS;
+    if (actorType) {
+      actors = actors.filter(a => a.type === actorType);
+    }
+    if (excludeTypes?.length) {
+      actors = actors.filter(a => !excludeTypes.includes(a.type));
+    }
+    return [textContent({ success: true, count: actors.length, deleted: actors.map(a => a.name) })];
+  },
+
+
 
   // ── Actor Extended ────────────────────────────────────────
 
@@ -268,6 +322,44 @@ const handlers: Record<string, HandlerFn> = {
     return [textContent({ success: true, message: `Activated scene: ${scene.name}`, sceneId: id })];
   },
 
+
+  'create-scene': (args) => {
+    const name = args.name as string;
+    const width = (args.width as number) || 4000;
+    const height = (args.height as number) || 3000;
+    const gridSize = (args.gridSize as number) || 100;
+    return [textContent({
+      success: true,
+      scene: {
+        _id: 'scene_' + Date.now(),
+        name,
+        active: false,
+        width,
+        height,
+        grid: { size: gridSize, distance: (args.gridDistance as number) || 5, units: (args.gridUnits as string) || 'ft' },
+      },
+    })];
+  },
+
+  'activate-scene': (args) => {
+    const sceneId = args.sceneId as string;
+    const scene = SCENES.find(s => s._id === sceneId);
+    if (!scene) {
+      return [textContent({ error: `Scene not found: ${sceneId}` })];
+    }
+    return [textContent({ success: true, _id: sceneId, name: scene.name, active: true, msg: 'Scene activated' })];
+  },
+
+  'update-scene': (args) => {
+    const id = args.id as string;
+    const data = args.data as Record<string, unknown>;
+    const scene = SCENES.find(s => s._id === id);
+    if (!scene) {
+      return [textContent({ error: `Scene not found: ${id}` })];
+    }
+    return [textContent({ success: true, _id: id, name: scene.name, updatedFields: Object.keys(data), msg: 'Scene updated' })];
+  },
+
   // ── Combat ────────────────────────────────────────────────
 
   'get-combat-state': (_args) => {
@@ -408,6 +500,60 @@ const handlers: Record<string, HandlerFn> = {
       condition,
       active,
       level: level || null,
+    })];
+  },
+
+
+  'place-token': (args) => {
+    const actorId = args.actorId as string;
+    const x = args.x as number;
+    const y = args.y as number;
+    const name = args.name as string | undefined;
+    const actor = ACTORS.find(a => a._id === actorId);
+    return [textContent({
+      success: true,
+      tokenId: 'token_' + Date.now(),
+      name: name || actor?.name || 'Unknown',
+      x,
+      y,
+      msg: 'Token placed successfully',
+    })];
+  },
+
+  'place-token-grid': (args) => {
+    const actorId = args.actorId as string;
+    const gridX = args.gridX as number;
+    const gridY = args.gridY as number;
+    const name = args.name as string | undefined;
+    const actor = ACTORS.find(a => a._id === actorId);
+    const gridSize = 100;
+    return [textContent({
+      success: true,
+      tokenId: 'token_' + Date.now(),
+      name: name || actor?.name || 'Unknown',
+      gridX,
+      gridY,
+      x: gridX * gridSize + gridSize / 2,
+      y: gridY * gridSize + gridSize / 2,
+      gridSize,
+      msg: `Placed at grid (${gridX}, ${gridY})`,
+    })];
+  },
+
+  'move-token-grid': (args) => {
+    const tokenId = args.tokenId as string;
+    const gridX = args.gridX as number;
+    const gridY = args.gridY as number;
+    const gridSize = 100;
+    return [textContent({
+      success: true,
+      tokenId,
+      gridX,
+      gridY,
+      x: gridX * gridSize + gridSize / 2,
+      y: gridY * gridSize + gridSize / 2,
+      gridSize,
+      msg: `Moved to grid (${gridX}, ${gridY})`,
     })];
   },
 
@@ -697,6 +843,73 @@ const handlers: Record<string, HandlerFn> = {
       roll,
       result: result || { text: 'No result', type: 0, range: [0, 0] },
       totalResults: table.results.length,
+    })];
+  },
+
+
+  'create-wall': (args) => {
+    const x1 = args.x1 as number;
+    const y1 = args.y1 as number;
+    const x2 = args.x2 as number;
+    const y2 = args.y2 as number;
+    const door = (args.door as boolean) ?? false;
+    return [textContent({
+      success: true,
+      wallId: 'wall_' + Date.now(),
+      c: [x1, y1, x2, y2],
+      door,
+      msg: 'Wall created successfully',
+    })];
+  },
+
+  'create-room': (args) => {
+    const x = args.x as number;
+    const y = args.y as number;
+    const width = args.width as number;
+    const height = args.height as number;
+    const doors = args.doors as any[] | undefined;
+    const wallCount = 4 + (doors?.length || 0);
+    return [textContent({
+      success: true,
+      count: wallCount,
+      walls: Array.from({ length: wallCount }, (_, i) => ({
+        id: 'wall_' + Date.now() + '_' + i,
+        c: [0, 0, 0, 0],
+        door: i >= 4,
+      })),
+      msg: `Room created with ${wallCount} wall(s)`,
+    })];
+  },
+
+  'create-wall-grid': (args) => {
+    const gridX1 = args.gridX1 as number;
+    const gridY1 = args.gridY1 as number;
+    const gridX2 = args.gridX2 as number;
+    const gridY2 = args.gridY2 as number;
+    return [textContent({
+      success: true,
+      wallId: 'wall_' + Date.now(),
+      gridCoords: { gridX1, gridY1, gridX2, gridY2 },
+      gridSize: 100,
+      msg: `Wall created from grid (${gridX1},${gridY1}) to (${gridX2},${gridY2})`,
+    })];
+  },
+
+  'list-walls': (_args) => {
+    return [textContent({
+      sceneId: SCENES.find(s => s.active)?._id || 'unknown',
+      sceneName: SCENES.find(s => s.active)?.name || 'Unknown',
+      totalWalls: 0,
+      walls: [],
+    })];
+  },
+
+  'delete-wall': (args) => {
+    const wallId = args.wallId as string;
+    return [textContent({
+      success: true,
+      wallId,
+      msg: 'Wall deleted successfully',
     })];
   },
 
