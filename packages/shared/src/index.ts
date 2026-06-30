@@ -371,6 +371,53 @@ export interface DeleteActorsByTypeArgs {
   excludeTypes?: string[];
 }
 
+// Walls
+export interface CreateWallArgs {
+  sceneId?: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  door?: boolean;
+  doorState?: 'closed' | 'open' | 'locked';
+  movement?: number;
+  sight?: number;
+  light?: number;
+  direction?: number;
+}
+
+export interface CreateRoomArgs {
+  sceneId?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  doors?: Array<{
+    wall: 'top' | 'bottom' | 'left' | 'right';
+    position?: number;
+    doorState?: 'closed' | 'open' | 'locked';
+  }>;
+}
+
+export interface CreateWallGridArgs {
+  sceneId?: string;
+  gridX1: number;
+  gridY1: number;
+  gridX2: number;
+  gridY2: number;
+  door?: boolean;
+  doorState?: 'closed' | 'open' | 'locked';
+}
+
+export interface ListWallsArgs {
+  sceneId?: string;
+}
+
+export interface DeleteWallArgs {
+  wallId: string;
+  sceneId?: string;
+}
+
 // ============================================================
 // Foundry Data Types (simplified)
 // ============================================================

@@ -846,6 +846,73 @@ const handlers: Record<string, HandlerFn> = {
     })];
   },
 
+
+  'create-wall': (args) => {
+    const x1 = args.x1 as number;
+    const y1 = args.y1 as number;
+    const x2 = args.x2 as number;
+    const y2 = args.y2 as number;
+    const door = (args.door as boolean) ?? false;
+    return [textContent({
+      success: true,
+      wallId: 'wall_' + Date.now(),
+      c: [x1, y1, x2, y2],
+      door,
+      msg: 'Wall created successfully',
+    })];
+  },
+
+  'create-room': (args) => {
+    const x = args.x as number;
+    const y = args.y as number;
+    const width = args.width as number;
+    const height = args.height as number;
+    const doors = args.doors as any[] | undefined;
+    const wallCount = 4 + (doors?.length || 0);
+    return [textContent({
+      success: true,
+      count: wallCount,
+      walls: Array.from({ length: wallCount }, (_, i) => ({
+        id: 'wall_' + Date.now() + '_' + i,
+        c: [0, 0, 0, 0],
+        door: i >= 4,
+      })),
+      msg: `Room created with ${wallCount} wall(s)`,
+    })];
+  },
+
+  'create-wall-grid': (args) => {
+    const gridX1 = args.gridX1 as number;
+    const gridY1 = args.gridY1 as number;
+    const gridX2 = args.gridX2 as number;
+    const gridY2 = args.gridY2 as number;
+    return [textContent({
+      success: true,
+      wallId: 'wall_' + Date.now(),
+      gridCoords: { gridX1, gridY1, gridX2, gridY2 },
+      gridSize: 100,
+      msg: `Wall created from grid (${gridX1},${gridY1}) to (${gridX2},${gridY2})`,
+    })];
+  },
+
+  'list-walls': (_args) => {
+    return [textContent({
+      sceneId: SCENES.find(s => s.active)?._id || 'unknown',
+      sceneName: SCENES.find(s => s.active)?.name || 'Unknown',
+      totalWalls: 0,
+      walls: [],
+    })];
+  },
+
+  'delete-wall': (args) => {
+    const wallId = args.wallId as string;
+    return [textContent({
+      success: true,
+      wallId,
+      msg: 'Wall deleted successfully',
+    })];
+  },
+
   // ── Scene Notes ───────────────────────────────────────────
 
   'get-scene-notes': (args) => {
