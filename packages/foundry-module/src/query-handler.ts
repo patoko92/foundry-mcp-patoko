@@ -1949,7 +1949,7 @@ async function createWall(
       dir: direction,
     };
 
-    const [wall] = await scene.createDocuments('Wall', [wallData]);
+    const [wall] = await scene.createEmbeddedDocuments('Wall', [wallData]);
     if (!wall) return error('Failed to create wall');
 
     return success({
@@ -2050,7 +2050,7 @@ async function createRoom(
       }
     }
 
-    const created = await scene.createDocuments('Wall', wallDocs);
+    const created = await scene.createEmbeddedDocuments('Wall', wallDocs);
 
     return success({
       count: created.length,
@@ -2101,7 +2101,7 @@ async function createWallGrid(
       light: 1,
     };
 
-    const [wall] = await scene.createDocuments('Wall', [wallData]);
+    const [wall] = await scene.createEmbeddedDocuments('Wall', [wallData]);
     if (!wall) return error('Failed to create wall');
 
     return success({
@@ -2192,7 +2192,17 @@ async function updateItem(args: Record<string, unknown>): Promise<QueryResult> {
     } else {
       // World item
       item = game.items?.get(id);
-      if (!item) return error(`World item not found: ${id}`);
+      if (!item) {
+        // Search actor-embedded items
+        for (const actor of game.actors?.contents ?? []) {
+          const actorItem = actor.items?.get(id);
+          if (actorItem) {
+            item = actorItem;
+            break;
+          }
+        }
+        if (!item) return error(`Item not found: ${id} (not in world, compendium, or any actor)`);
+      }
     }
 
     await item.update(data);
