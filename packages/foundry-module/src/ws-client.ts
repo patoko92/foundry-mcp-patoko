@@ -166,13 +166,23 @@ export class McpWebSocketClient {
 
     logInfo(`Handling query: ${method} (id: ${queryId})`);
 
-    const result = await handleQuery(method, args);
+    try {
+      const result = await handleQuery(method, args);
 
-    this.send({
-      type: 'mcp-response',
-      id: queryId,
-      data: result,
-    });
+      this.send({
+        type: 'mcp-response',
+        id: queryId,
+        data: result,
+      });
+    } catch (err) {
+      logError(`Unhandled error in query ${method}:`, err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.send({
+        type: 'mcp-error',
+        id: queryId,
+        data: { error: `Unhandled error: ${errorMessage}` },
+      });
+    }
   }
 
   // ─── Module info ────────────────────────────────────────────────
