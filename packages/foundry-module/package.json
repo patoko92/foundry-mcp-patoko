@@ -6,9 +6,11 @@
   "description": "Foundry VTT client module for MCP Patoko bridge",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc"
+    "build": "esbuild src/main.ts --bundle --format=esm --target=es2022 --outfile=dist/main.js --external:socket.io-client",
+    "build:watch": "npm run build -- --watch"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "typescript": "^5.7.0"
   }
 }
