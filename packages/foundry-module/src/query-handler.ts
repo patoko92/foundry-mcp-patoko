@@ -45,6 +45,7 @@ const WRITE_METHODS = new Set([
   'createRoom',
   'createWallGrid',
   'deleteWall',
+  'updateItem',
 ]);
 
 export interface QueryResult {
@@ -183,6 +184,10 @@ const methodMap: Record<string, MethodHandler> = {
   createWallGrid,
   listWalls,
   deleteWall,
+  // Items (World + Compendium)
+  updateItem,
+  searchItems,
+  searchAll,
 };
 
 // ─── World Info ─────────────────────────────────────────────────────
@@ -2147,5 +2152,213 @@ async function deleteWall(
 }
 
 
-/usr/bin/bash: line 5: /tmp/hermes-snap-53d6eb49d7de.sh: No such file or directory
-/usr/bin/bash: line 6: /tmp/hermes-cwd-53d6eb49d7de.txt: No such file or directory
+// ─── Items (World + Compendium) ───────────────────────────────
+
+async function updateItem(args: Record<string, unknown>): Promise<QueryResult> {
+  try {
+    const id = args.id as string;
+    const pack = args.pack as string | undefined;
+    const data = args.data as Record<string, unknown>;
+
+    if (!id) return error('id is required');
+    if (!data) return error('data is required');
+
+    let item: any = null;
+
+    if (pack) {
+      // Compendium item
+      const compendiumPack = game.packs.get(pack);
+      if (!compendiumPack) return error(`Compendium pack not found: ${pack}`);
+
+      item = await compendiumPack.getDocument(id);
+      if (!item) return error(`Item not found in pack: ${id}`);
+    } else {
+      // World item
+      item = game.items?.get(id);
+      if (!item) return error(`World item not found: ${id}`);
+    }
+
+    await item.update(data);
+
+    return success({
+      _id: item.id,
+      name: item.name,
+      type: item.type,
+      pack: pack ?? null,
+      msg: 'Item updated successfully',
+    });
+  } catch (err) {
+    return error(`Failed to update item: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function searchItems(args: Record<string, unknown>): Promise<QueryResult> {
+  try {
+    const query = (args.query as string)?.toLowerCase();
+    const typeFilter = args.type as string | undefined;
+    const limit = (args.limit as number) ?? 20;
+
+    if (!query) return error('query is required');
+
+    const results: any[] = [];
+
+    // 1) Search world items
+    const worldItems = game.items?.contents ?? [];
+    for (const item of worldItems) {
+      if (results.length >= limit) break;
+      if (item.name?.toLowerCase().includes(query)) {
+        if (typeFilter && item.type !== typeFilter) continue;
+        results.push({
+          source: 'world',
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          img: item.img,
+          system: item.system,
+        });
+      }
+    }
+
+    // 2) Search compendium packs (items only)
+    const packs = game.packs.filter(
+      (p: any) => !typeFilter || p.metadata?.type === 'Item'
+    );
+
+    for (const pack of packs) {
+      if (results.length >= limit) break;
+      try {
+        const docs = await pack.getDocuments();
+        for (const doc of docs) {
+          if (results.length >= limit) break;
+          if (doc.name?.toLowerCase().includes(query)) {
+            if (typeFilter && doc.type !== typeFilter) continue;
+            results.push({
+              source: pack.collection,
+              sourceLabel: pack.metadata?.label ?? pack.collection,
+              id: doc.id ?? doc._id,
+              name: doc.name,
+              type: doc.type,
+              img: doc.img,
+            });
+          }
+        }
+      } catch {
+        // Skip packs that fail to load
+      }
+    }
+
+    return success({ total: results.length, results });
+  } catch (err) {
+    return error(`Failed to search items: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function searchAll(args: Record<string, unknown>): Promise<QueryResult> {
+  try {
+    const query = (args.query as string)?.toLowerCase();
+    const typesFilter = args.types as string[] | undefined;
+    const limit = (args.limit as number) ?? 10;
+
+    if (!query) return error('query is required');
+
+    const allResults: Record<string, any[]> = {};
+
+    // Helper to check if a type is allowed
+    const isAllowed = (type: string) => !typesFilter || typesFilter.some(t => t.toLowerCase() === type.toLowerCase());
+
+    // 1) World Items
+    if (isAllowed('Item')) {
+      const worldItems: any[] = [];
+      const items = game.items?.contents ?? [];
+      for (const item of items) {
+        if (worldItems.length >= limit) break;
+        if (item.name?.toLowerCase().includes(query)) {
+          worldItems.push({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            source: 'world',
+            img: item.img,
+          });
+        }
+      }
+      if (worldItems.length) allResults.worldItems = worldItems;
+    }
+
+    // 2) World Actors
+    if (isAllowed('Actor')) {
+      const worldActors: any[] = [];
+      const actors = game.actors?.contents ?? [];
+      for (const actor of actors) {
+        if (worldActors.length >= limit) break;
+        if (actor.name?.toLowerCase().includes(query)) {
+          worldActors.push({
+            id: actor.id,
+            name: actor.name,
+            type: actor.type,
+            source: 'world',
+            img: actor.img,
+          });
+        }
+      }
+      if (worldActors.length) allResults.worldActors = worldActors;
+    }
+
+    // 3) Journals
+    if (isAllowed('JournalEntry')) {
+      const journals: any[] = [];
+      const entries = game.journal?.contents ?? [];
+      for (const j of entries) {
+        if (journals.length >= limit) break;
+        if (j.name?.toLowerCase().includes(query)) {
+          journals.push({
+            id: j.id,
+            name: j.name,
+            source: 'world',
+            folder: j.folder?.name ?? null,
+          });
+        }
+      }
+      if (journals.length) allResults.journals = journals;
+    }
+
+    // 4) Compendium packs (all types)
+    for (const pack of game.packs) {
+      try {
+        const packType = pack.metadata?.type ?? 'unknown';
+        if (typesFilter?.length && !typesFilter.some(t => t.toLowerCase() === packType.toLowerCase())) continue;
+
+        const docs = await pack.getDocuments();
+        const packResults: any[] = [];
+        for (const doc of docs) {
+          if (packResults.length >= limit) break;
+          if (doc.name?.toLowerCase().includes(query)) {
+            packResults.push({
+              id: doc.id ?? doc._id,
+              name: doc.name,
+              type: doc.type ?? packType,
+              source: pack.collection,
+              sourceLabel: pack.metadata?.label ?? pack.collection,
+              img: doc.img,
+            });
+          }
+        }
+        if (packResults.length) {
+          const key = `pack_${pack.collection}`;
+          allResults[key] = packResults;
+        }
+      } catch {
+        // Skip packs that fail to load
+      }
+    }
+
+    // Summary
+    const totalResults = Object.values(allResults).reduce((sum, arr) => sum + arr.length, 0);
+
+    return success({ totalResults, sources: allResults });
+  } catch (err) {
+    return error(`Failed to search all: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+

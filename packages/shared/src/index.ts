@@ -541,3 +541,24 @@ export interface FoundryRollTable {
   description: string;
   results: Array<{ _id: string; text: string; type: number; range: [number, number] }>;
 }
+
+// Items (World + Compendium)
+export interface UpdateItemArgs {
+  id: string;
+  pack?: string;
+  data: Record<string, unknown>;
+}
+
+export interface SearchItemsArgs {
+  query: string;
+  type?: string;
+  limit?: number;
+}
+
+export interface SearchAllArgs {
+  query: string;
+  types?: string[];
+  limit?: number;
+}
+/usr/bin/bash: line 5: /tmp/hermes-snap-b7f394987855.sh: No such file or directory
+/usr/bin/bash: line 6: /tmp/hermes-cwd-b7f394987855.txt: No such file or directory

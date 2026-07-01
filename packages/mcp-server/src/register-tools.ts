@@ -20,6 +20,7 @@ import { registerFolderTools } from './tools/folders.js';
 import { registerTableTools } from './tools/tables.js';
 import { registerSceneDrawingTools } from './tools/scene-drawing.js';
 import { registerWallTools } from './tools/walls.js';
+import { registerItemTools } from './tools/items.js';
 
 /**
  * Register all MCP tools on the server.
@@ -45,6 +46,9 @@ export function registerAllTools(server: McpServer, client: IFoundryClient): voi
   registerTableTools(server, client);
   registerSceneDrawingTools(server, client);
   registerWallTools(server, client);
+  registerItemTools(server, client);
 
   console.error('[register-tools] All tools registered');
 }
+/usr/bin/bash: line 5: /tmp/hermes-snap-b7f394987855.sh: No such file or directory
+/usr/bin/bash: line 6: /tmp/hermes-cwd-b7f394987855.txt: No such file or directory
