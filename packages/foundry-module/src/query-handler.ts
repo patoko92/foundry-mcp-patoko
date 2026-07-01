@@ -602,14 +602,19 @@ async function searchCompendium(
 
   const results: any[] = [];
 
-  for (const pack of packs) {
-    if (results.length >= limit) break;
+  // Parallel pack loading with 5s timeout per pack
+  const packTimeout = 5000;
+  const packPromises = packs.map(async (pack: any) => {
     try {
-      const docs = await pack.getDocuments();
+      const docs = await Promise.race([
+        pack.getDocuments(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), packTimeout))
+      ]);
+      const matches: any[] = [];
       for (const doc of docs) {
-        if (results.length >= limit) break;
+        if (matches.length >= limit) break;
         if (doc.name?.toLowerCase().includes(query)) {
-          results.push({
+          matches.push({
             pack: pack.collection,
             packLabel: pack.metadata?.label ?? pack.collection,
             id: doc.id ?? doc._id,
@@ -619,9 +624,21 @@ async function searchCompendium(
           });
         }
       }
+      return matches;
     } catch {
-      // Skip packs that fail to load
+      return [];
     }
+  });
+
+  const settled = await Promise.allSettled(packPromises);
+  for (const r of settled) {
+    if (r.status === 'fulfilled') {
+      for (const m of r.value) {
+        if (results.length >= limit) break;
+        results.push(m);
+      }
+    }
+    if (results.length >= limit) break;
   }
 
   return success(results);
@@ -2219,20 +2236,23 @@ async function searchItems(args: Record<string, unknown>): Promise<QueryResult> 
       }
     }
 
-    // 2) Search compendium packs (items only)
+    // 2) Search compendium packs (items only) — parallel with timeout
     const packs = game.packs.filter(
       (p: any) => !typeFilter || p.metadata?.type === 'Item'
     );
 
-    for (const pack of packs) {
-      if (results.length >= limit) break;
+    const itemPackPromises = packs.map(async (pack: any) => {
       try {
-        const docs = await pack.getDocuments();
+        const docs = await Promise.race([
+          pack.getDocuments(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]);
+        const matches: any[] = [];
         for (const doc of docs) {
-          if (results.length >= limit) break;
+          if (matches.length >= limit) break;
           if (doc.name?.toLowerCase().includes(query)) {
             if (typeFilter && doc.type !== typeFilter) continue;
-            results.push({
+            matches.push({
               source: pack.collection,
               sourceLabel: pack.metadata?.label ?? pack.collection,
               id: doc.id ?? doc._id,
@@ -2242,9 +2262,21 @@ async function searchItems(args: Record<string, unknown>): Promise<QueryResult> 
             });
           }
         }
+        return matches;
       } catch {
-        // Skip packs that fail to load
+        return [];
       }
+    });
+
+    const itemSettled = await Promise.allSettled(itemPackPromises);
+    for (const r of itemSettled) {
+      if (r.status === 'fulfilled') {
+        for (const m of r.value) {
+          if (results.length >= limit) break;
+          results.push(m);
+        }
+      }
+      if (results.length >= limit) break;
     }
 
     return success({ total: results.length, results });
@@ -2322,13 +2354,16 @@ async function searchAll(args: Record<string, unknown>): Promise<QueryResult> {
       if (journals.length) allResults.journals = journals;
     }
 
-    // 4) Compendium packs (all types)
-    for (const pack of game.packs) {
+    // 4) Compendium packs (all types) — parallel with timeout
+    const allPackPromises = game.packs.map(async (pack: any) => {
       try {
         const packType = pack.metadata?.type ?? 'unknown';
-        if (typesFilter?.length && !typesFilter.some(t => t.toLowerCase() === packType.toLowerCase())) continue;
+        if (typesFilter?.length && !typesFilter.some(t => t.toLowerCase() === packType.toLowerCase())) return { key: '', results: [] };
 
-        const docs = await pack.getDocuments();
+        const docs = await Promise.race([
+          pack.getDocuments(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]);
         const packResults: any[] = [];
         for (const doc of docs) {
           if (packResults.length >= limit) break;
@@ -2343,12 +2378,16 @@ async function searchAll(args: Record<string, unknown>): Promise<QueryResult> {
             });
           }
         }
-        if (packResults.length) {
-          const key = `pack_${pack.collection}`;
-          allResults[key] = packResults;
-        }
+        return { key: packResults.length ? `pack_${pack.collection}` : '', results: packResults };
       } catch {
-        // Skip packs that fail to load
+        return { key: '', results: [] };
+      }
+    });
+
+    const allSettled = await Promise.allSettled(allPackPromises);
+    for (const r of allSettled) {
+      if (r.status === 'fulfilled' && r.value.key) {
+        allResults[r.value.key] = r.value.results;
       }
     }
 
