@@ -147,6 +147,8 @@ const methodMap: Record<string, MethodHandler> = {
   updateToken,
   deleteTokens,
   toggleTokenCondition,
+  placeToken,
+  placeTokenGrid,
   // Combat Extended
   startCombat,
   endCombat,
@@ -917,6 +919,106 @@ async function moveToken(
   }
 
   return error(`Token not found: ${tokenId}`);
+}
+
+async function placeToken(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorId = args.actorId as string;
+    const x = args.x as number;
+    const y = args.y as number;
+    const sceneId = args.sceneId as string | undefined;
+    const name = args.name as string | undefined;
+    const scale = (args.scale as number) ?? 1;
+
+    if (!actorId) return error('actorId is required');
+    if (x === undefined || y === undefined) return error('x and y are required');
+
+    const actor = game.actors.get(actorId);
+    if (!actor) return error(`Actor not found: ${actorId}`);
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No current scene active');
+
+    const tokenData: Record<string, any> = {
+      actorId: actor.id,
+      name: name ?? actor.name,
+      img: actor.img,
+      x,
+      y,
+      scale,
+    };
+
+    const [token] = await scene.createEmbeddedDocuments('Token', [tokenData]);
+    if (!token) return error('Failed to create token');
+
+    return success({
+      _id: token.id,
+      name: token.name,
+      actorId: token.actorId,
+      x: token.x,
+      y: token.y,
+      scale: token.scale,
+      msg: 'Token placed successfully',
+    });
+  } catch (err) {
+    return error(`Failed to place token: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function placeTokenGrid(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorId = args.actorId as string;
+    const gridX = args.gridX as number;
+    const gridY = args.gridY as number;
+    const sceneId = args.sceneId as string | undefined;
+    const name = args.name as string | undefined;
+
+    if (!actorId) return error('actorId is required');
+    if (gridX === undefined || gridY === undefined) return error('gridX and gridY are required');
+
+    const actor = game.actors.get(actorId);
+    if (!actor) return error(`Actor not found: ${actorId}`);
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No current scene active');
+
+    const gs = scene.grid?.size ?? 100;
+    const x = gridX * gs;
+    const y = gridY * gs;
+
+    const tokenData: Record<string, any> = {
+      actorId: actor.id,
+      name: name ?? actor.name,
+      img: actor.img,
+      x,
+      y,
+    };
+
+    const [token] = await scene.createEmbeddedDocuments('Token', [tokenData]);
+    if (!token) return error('Failed to create token');
+
+    return success({
+      _id: token.id,
+      name: token.name,
+      actorId: token.actorId,
+      x: token.x,
+      y: token.y,
+      gridX,
+      gridY,
+      gridSize: gs,
+      msg: `Token placed at grid (${gridX}, ${gridY})`,
+    });
+  } catch (err) {
+    return error(`Failed to place token at grid position: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // ─── Actor Extended ────────────────────────────────────────────────
