@@ -18,20 +18,6 @@ export function registerItemTools(server: McpServer, client: IFoundryClient): vo
   );
 
   server.tool(
-    'search-items',
-    'Search across compendium packs AND world items by name. Returns results from both sources.',
-    {
-      query: z.string().describe('Search query string (matches item names)'),
-      type: z.string().optional().describe('Filter by item type (e.g. weapon, spell, equipment)'),
-      limit: z.number().optional().describe('Maximum number of results (default 20)'),
-    },
-    async (args) => {
-      const content = await client.callMethod('search-items', args);
-      return { content };
-    }
-  );
-
-  server.tool(
     'search-all',
     'Search across ALL Foundry data: compendium packs, world items, journals, and actors. Unified search that eliminates multi-step lookups.',
     {

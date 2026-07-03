@@ -24,10 +24,10 @@ export function registerSceneTools(server: McpServer, client: IFoundryClient): v
   );
 
   server.tool(
-    'switch-scene',
-    'Switch to a different scene by ID (view only, does not activate for players)',
+    'preview-scene',
+    'Preview a scene by ID (GM-only view, does not activate for players)',
     {
-      id: z.string().describe('Scene ID to activate'),
+      id: z.string().describe('Scene ID to preview'),
     },
     async (args) => {
       const content = await client.callMethod('switch-scene', args);
@@ -75,6 +75,18 @@ export function registerSceneTools(server: McpServer, client: IFoundryClient): v
     },
     async (args) => {
       const content = await client.callMethod('update-scene', args);
+      return { content };
+    }
+  );
+
+  server.tool(
+    'get-scene-notes',
+    'Get scene notes and journal pins for a scene.',
+    {
+      sceneId: z.string().optional().describe('Scene ID (defaults to active scene)'),
+    },
+    async (args) => {
+      const content = await client.callMethod('get-scene-notes', args);
       return { content };
     }
   );
