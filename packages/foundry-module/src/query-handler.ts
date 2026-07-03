@@ -15,7 +15,9 @@ const WRITE_METHODS = new Set([
   'updateScene',
   'createJournal',
   'moveToken',
+  'moveTokenGrid',
   'placeToken',
+  'placeTokenGrid',
   'updateActorHp',
   'addItemToActor',
   'removeItemFromActor',
@@ -42,6 +44,7 @@ const WRITE_METHODS = new Set([
   'createFolder',
   'rollTable',
   'createWall',
+  'createWallGrid',
   'createRoom',
   'deleteWall',
   'updateItem',
@@ -134,6 +137,7 @@ const methodMap: Record<string, MethodHandler> = {
   listTokens,
   getTokenDetails,
   moveToken,
+  moveTokenGrid,
   // Actor Queries
   listPlayerCharacters,
   getWorldUsers,
@@ -152,6 +156,7 @@ const methodMap: Record<string, MethodHandler> = {
   deleteTokens,
   toggleTokenCondition,
   placeToken,
+  placeTokenGrid,
   // Combat Extended
   startCombat,
   endCombat,
@@ -185,12 +190,16 @@ const methodMap: Record<string, MethodHandler> = {
   getSceneNotes,
   // Walls
   createWall,
+  createWallGrid,
   createRoom,
   listWalls,
   deleteWall,
   // Items (World + Compendium)
   updateItem,
+  searchItems,
   searchAll,
+  // Journals
+  searchJournals,
   // Character Validation
   validateCharacterHandler,
   // Compendium Management
@@ -867,28 +876,12 @@ async function moveToken(
   args: Record<string, unknown>
 ): Promise<QueryResult> {
   const tokenId = args.tokenId as string;
-  let x = args.x as number | undefined;
-  let y = args.y as number | undefined;
-  const gridX = args.gridX as number | undefined;
-  const gridY = args.gridY as number | undefined;
+  const x = args.x as number;
+  const y = args.y as number;
   const sceneId = args.sceneId as string | undefined;
 
   if (!tokenId) return error('tokenId is required');
-
-  // Coordinate resolution: pixel XOR grid
-  const hasPixel = x !== undefined && y !== undefined;
-  const hasGrid = gridX !== undefined && gridY !== undefined;
-  if (hasPixel === hasGrid) {
-    return error('Provide exactly one of (x, y) pixel coordinates or (gridX, gridY) grid coordinates');
-  }
-
-  if (hasGrid) {
-    const scene = sceneId ? game.scenes.get(sceneId) : game.scenes.current;
-    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No current scene active');
-    const gs = scene.grid?.size ?? 100;
-    x = gridX * gs;
-    y = gridY * gs;
-  }
+  if (x === undefined || y === undefined) return error('x and y are required');
 
   // Try canvas tokens first
   if (canvas?.tokens?.placeables) {
@@ -926,27 +919,63 @@ async function moveToken(
   return error(`Token not found: ${tokenId}`);
 }
 
+async function moveTokenGrid(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const tokenId = args.tokenId as string;
+    const gridX = args.gridX as number;
+    const gridY = args.gridY as number;
+    const sceneId = args.sceneId as string | undefined;
+
+    if (!tokenId) return error('tokenId is required');
+    if (gridX === undefined || gridY === undefined) return error('gridX and gridY are required');
+
+    const scene = sceneId ? game.scenes.get(sceneId) : game.scenes.current;
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No current scene active');
+    const gs = scene.grid?.size ?? 100;
+    const x = gridX * gs;
+    const y = gridY * gs;
+
+    // Try canvas tokens first
+    if (canvas?.tokens?.placeables) {
+      const token = canvas.tokens.placeables.find(
+        (t: any) => (t.id ?? t.document?.id) === tokenId
+      );
+
+      if (token) {
+        const doc = token.document ?? token;
+        await doc.update({ x, y });
+        return success({ _id: tokenId, x, y, gridX, gridY, msg: 'Token moved successfully' });
+      }
+    }
+
+    // Fallback: update scene token directly
+    const sceneToken = scene.tokens?.get(tokenId);
+    if (sceneToken) {
+      await sceneToken.update({ x, y });
+      return success({ _id: tokenId, x, y, gridX, gridY, msg: 'Token moved successfully' });
+    }
+
+    return error(`Token not found: ${tokenId}`);
+  } catch (err) {
+    return error(`Failed to move token: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 async function placeToken(
   args: Record<string, unknown>
 ): Promise<QueryResult> {
   try {
     const actorId = args.actorId as string;
-    let x = args.x as number | undefined;
-    let y = args.y as number | undefined;
-    const gridX = args.gridX as number | undefined;
-    const gridY = args.gridY as number | undefined;
+    const x = args.x as number;
+    const y = args.y as number;
     const sceneId = args.sceneId as string | undefined;
     const name = args.name as string | undefined;
     const scale = (args.scale as number) ?? 1;
 
     if (!actorId) return error('actorId is required');
-
-    // Coordinate resolution: pixel XOR grid
-    const hasPixel = x !== undefined && y !== undefined;
-    const hasGrid = gridX !== undefined && gridY !== undefined;
-    if (hasPixel === hasGrid) {
-      return error('Provide exactly one of (x, y) pixel coordinates or (gridX, gridY) grid coordinates');
-    }
+    if (x === undefined || y === undefined) return error('x and y are required');
 
     const actor = game.actors.get(actorId);
     if (!actor) return error(`Actor not found: ${actorId}`);
@@ -955,12 +984,6 @@ async function placeToken(
       ? game.scenes.get(sceneId)
       : game.scenes.current;
     if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No current scene active');
-
-    if (hasGrid) {
-      const gs = scene.grid?.size ?? 100;
-      x = gridX * gs;
-      y = gridY * gs;
-    }
 
     const tokenData: Record<string, any> = {
       actorId: actor.id,
@@ -981,6 +1004,57 @@ async function placeToken(
       x: token.x,
       y: token.y,
       scale: token.scale,
+      msg: 'Token placed successfully',
+    });
+  } catch (err) {
+    return error(`Failed to place token: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function placeTokenGrid(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorId = args.actorId as string;
+    const gridX = args.gridX as number;
+    const gridY = args.gridY as number;
+    const sceneId = args.sceneId as string | undefined;
+    const name = args.name as string | undefined;
+
+    if (!actorId) return error('actorId is required');
+    if (gridX === undefined || gridY === undefined) return error('gridX and gridY are required');
+
+    const actor = game.actors.get(actorId);
+    if (!actor) return error(`Actor not found: ${actorId}`);
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No current scene active');
+
+    const gs = scene.grid?.size ?? 100;
+    const x = gridX * gs;
+    const y = gridY * gs;
+
+    const tokenData: Record<string, any> = {
+      actorId: actor.id,
+      name: name ?? actor.name,
+      img: actor.img,
+      x,
+      y,
+    };
+
+    const [token] = await scene.createEmbeddedDocuments('Token', [tokenData]);
+    if (!token) return error('Failed to create token');
+
+    return success({
+      _id: token.id,
+      name: token.name,
+      actorId: token.actorId,
+      x: token.x,
+      y: token.y,
+      gridX,
+      gridY,
       msg: 'Token placed successfully',
     });
   } catch (err) {
@@ -2194,14 +2268,10 @@ async function createWall(
 ): Promise<QueryResult> {
   try {
     const sceneId = args.sceneId as string | undefined;
-    let x1 = args.x1 as number | undefined;
-    let y1 = args.y1 as number | undefined;
-    let x2 = args.x2 as number | undefined;
-    let y2 = args.y2 as number | undefined;
-    const gridX1 = args.gridX1 as number | undefined;
-    const gridY1 = args.gridY1 as number | undefined;
-    const gridX2 = args.gridX2 as number | undefined;
-    const gridY2 = args.gridY2 as number | undefined;
+    const x1 = args.x1 as number;
+    const y1 = args.y1 as number;
+    const x2 = args.x2 as number;
+    const y2 = args.y2 as number;
     const door = (args.door as boolean) ?? false;
     const doorState = args.doorState as string | undefined;
     const movement = (args.movement as number) ?? 1;
@@ -2209,11 +2279,8 @@ async function createWall(
     const light = (args.light as number) ?? 1;
     const direction = (args.direction as number) ?? 0;
 
-    // Coordinate resolution: pixel XOR grid
-    const hasPixel = x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined;
-    const hasGrid = gridX1 !== undefined && gridY1 !== undefined && gridX2 !== undefined && gridY2 !== undefined;
-    if (hasPixel === hasGrid) {
-      return error('Provide exactly one of (x1,y1,x2,y2) pixel coordinates or (gridX1,gridY1,gridX2,gridY2) grid coordinates');
+    if (x1 === undefined || y1 === undefined || x2 === undefined || y2 === undefined) {
+      return error('x1, y1, x2, y2 are required');
     }
 
     const scene = sceneId
@@ -2222,12 +2289,62 @@ async function createWall(
 
     if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No active scene');
 
-    if (hasGrid) {
-      const gs = scene.grid?.size ?? 100;
-      const px = (gridCoord: number) => gridCoord * gs + gs / 2;
-      x1 = px(gridX1); y1 = px(gridY1);
-      x2 = px(gridX2); y2 = px(gridY2);
+    const wallData: Record<string, any> = {
+      c: [x1, y1, x2, y2],
+      door: door ? 1 : 0,
+      ds: door ? (doorState === 'locked' ? 2 : doorState === 'open' ? 1 : 0) : 0,
+      move: movement,
+      sense: sight,
+      light,
+      dir: direction,
+    };
+
+    const [wall] = await scene.createEmbeddedDocuments('Wall', [wallData]);
+    if (!wall) return error('Failed to create wall');
+
+    return success({
+      wallId: wall.id,
+      c: wall.c,
+      door: wall.door,
+      msg: 'Wall created successfully',
+    });
+  } catch (err) {
+    return error(`Failed to create wall: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function createWallGrid(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const sceneId = args.sceneId as string | undefined;
+    const gridX1 = args.gridX1 as number;
+    const gridY1 = args.gridY1 as number;
+    const gridX2 = args.gridX2 as number;
+    const gridY2 = args.gridY2 as number;
+    const door = (args.door as boolean) ?? false;
+    const doorState = args.doorState as string | undefined;
+    const movement = (args.movement as number) ?? 1;
+    const sight = (args.sight as number) ?? 1;
+    const light = (args.light as number) ?? 1;
+    const direction = (args.direction as number) ?? 0;
+
+    if (gridX1 === undefined || gridY1 === undefined || gridX2 === undefined || gridY2 === undefined) {
+      return error('gridX1, gridY1, gridX2, gridY2 are required');
     }
+
+    const scene = sceneId
+      ? game.scenes.get(sceneId)
+      : game.scenes.current;
+
+    if (!scene) return error(sceneId ? `Scene not found: ${sceneId}` : 'No active scene');
+
+    const gs = scene.grid?.size ?? 100;
+    const px = (gridCoord: number) => gridCoord * gs + gs / 2;
+    const x1 = px(gridX1);
+    const y1 = px(gridY1);
+    const x2 = px(gridX2);
+    const y2 = px(gridY2);
 
     const wallData: Record<string, any> = {
       c: [x1, y1, x2, y2],
@@ -2452,6 +2569,93 @@ async function updateItem(args: Record<string, unknown>): Promise<QueryResult> {
     });
   } catch (err) {
     return error(`Failed to update item: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function searchItems(args: Record<string, unknown>): Promise<QueryResult> {
+  try {
+    const query = (args.query as string)?.toLowerCase();
+    const typeFilter = args.type as string | undefined;
+    const limit = (args.limit as number) ?? 20;
+
+    if (!query) return error('query is required');
+
+    const results: any[] = [];
+
+    // 1) World items
+    const worldItems = game.items?.contents ?? [];
+    for (const item of worldItems) {
+      if (results.length >= limit) break;
+      if (typeFilter && item.type !== typeFilter) continue;
+      if (item.name?.toLowerCase().includes(query)) {
+        results.push({
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          source: 'world',
+          img: item.img,
+        });
+      }
+    }
+
+    // 2) Compendium items
+    for (const pack of game.packs) {
+      if (results.length >= limit) break;
+      const packType = pack.metadata?.type;
+      if (packType !== 'Item') continue;
+
+      try {
+        const docs = await Promise.race([
+          pack.getDocuments(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+        ]);
+        for (const doc of docs) {
+          if (results.length >= limit) break;
+          if (typeFilter && doc.type !== typeFilter) continue;
+          if (doc.name?.toLowerCase().includes(query)) {
+            results.push({
+              id: doc.id ?? doc._id,
+              name: doc.name,
+              type: doc.type,
+              source: pack.collection,
+              sourceLabel: pack.metadata?.label ?? pack.collection,
+              img: doc.img,
+            });
+          }
+        }
+      } catch {
+        // skip packs that timeout
+      }
+    }
+
+    return success({ totalResults: results.length, results });
+  } catch (err) {
+    return error(`Failed to search items: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function searchJournals(args: Record<string, unknown>): Promise<QueryResult> {
+  try {
+    const query = (args.query as string)?.toLowerCase();
+    if (!query) return error('query is required');
+
+    const results: any[] = [];
+    const entries = game.journal?.contents ?? [];
+
+    for (const j of entries) {
+      if (j.name?.toLowerCase().includes(query)) {
+        results.push({
+          id: j.id,
+          name: j.name,
+          source: 'world',
+          folder: j.folder?.name ?? null,
+        });
+      }
+    }
+
+    return success({ totalResults: results.length, results });
+  } catch (err) {
+    return error(`Failed to search journals: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
