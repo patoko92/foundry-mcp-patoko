@@ -4,6 +4,8 @@
  * Write operations require GM permissions.
  */
 
+import { validateCharacter } from './validate-character.js';
+
 const WRITE_METHODS = new Set([
   'createActor',
   'updateActor',
@@ -141,6 +143,8 @@ const methodMap: Record<string, MethodHandler> = {
   getActorItems,
   getActorSpells,
   updateActorHp,
+  // Character Summary
+  getCharacterSummary,
   addItemToActor,
   removeItemFromActor,
   // Token Extended
@@ -190,6 +194,8 @@ const methodMap: Record<string, MethodHandler> = {
   updateItem,
   searchItems,
   searchAll,
+  // Character Validation
+  validateCharacterHandler,
 };
 
 // ─── World Info ─────────────────────────────────────────────────────
@@ -1023,12 +1029,72 @@ async function placeTokenGrid(
 
 // ─── Actor Extended ────────────────────────────────────────────────
 
+function compactItem(item: any): Record<string, unknown> {
+  const sys = item.system ?? {};
+  const base: Record<string, unknown> = {
+    name: item.name,
+    type: item.type,
+  };
+
+  switch (item.type) {
+    case 'weapon': {
+      base.equipped = sys.equipped ?? false;
+      // Format damage: system.damage = { parts: [["1d6", "slashing"], ...], versatile: "1d8" }
+      const parts = sys.damage?.parts;
+      if (Array.isArray(parts) && parts.length > 0) {
+        base.damage = parts.map((p: any[]) => `${p[0]} ${p[1] || ''}`).join(' + ').trim();
+      }
+      const props = sys.properties;
+      if (props && typeof props === 'object') {
+        base.properties = Object.keys(props).filter((k) => props[k]);
+      }
+      if (sys.range) base.range = sys.range;
+      break;
+    }
+    case 'equipment': {
+      base.equipped = sys.equipped ?? false;
+      if (sys.armor?.value != null) base.ac = sys.armor.value;
+      break;
+    }
+    case 'spell': {
+      base.level = sys.level;
+      base.school = sys.school;
+      base.prepared = sys.prepared;
+      break;
+    }
+    case 'class': {
+      base.level = sys.levels;
+      base.hitDice = sys.hitDice;
+      break;
+    }
+    case 'race': {
+      base.speed = sys.speed;
+      break;
+    }
+    case 'feature': {
+      // name and type only
+      break;
+    }
+    case 'consumable': {
+      base.quantity = sys.quantity ?? 1;
+      break;
+    }
+    case 'loot': {
+      base.quantity = sys.quantity ?? 1;
+      break;
+    }
+  }
+
+  return base;
+}
+
 async function getActorItems(
   args: Record<string, unknown>
 ): Promise<QueryResult> {
   try {
     const actorId = args.actorId as string;
     const typeFilter = args.type as string | undefined;
+    const compact = (args.compact as boolean) ?? false;
 
     if (!actorId) return error('actorId is required');
 
@@ -1038,6 +1104,21 @@ async function getActorItems(
     let items = actor.items.contents;
     if (typeFilter) {
       items = items.filter((i: any) => i.type === typeFilter);
+    }
+
+    if (compact) {
+      const compactItems = items.map((i: any) => compactItem(i));
+      // Build summary
+      const byType: Record<string, number> = {};
+      let equippedCount = 0;
+      for (const i of items) {
+        byType[i.type] = (byType[i.type] ?? 0) + 1;
+        if (i.system?.equipped) equippedCount++;
+      }
+      return success({
+        summary: { total: items.length, byType, equipped: equippedCount },
+        items: compactItems,
+      });
     }
 
     return success(
@@ -1141,6 +1222,138 @@ async function updateActorHp(
     });
   } catch (err) {
     return error(`Failed to update actor HP: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function getCharacterSummary(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorId = args.actorId as string;
+    if (!actorId) return error('actorId is required');
+
+    const actor = game.actors.get(actorId);
+    if (!actor) return error(`Actor not found: ${actorId}`);
+
+    const sys = actor.system ?? {};
+    const abilities = sys.abilities ?? {};
+
+    // Extract ability scores
+    const abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+    const abilityScores: Record<string, number> = {};
+    const saves: string[] = [];
+
+    for (const ab of abilityNames) {
+      const abilityData = abilities[ab];
+      if (abilityData) {
+        abilityScores[ab] = abilityData.value ?? 10;
+        if ((abilityData.proficient ?? 0) > 0) {
+          saves.push(ab);
+        }
+      } else {
+        abilityScores[ab] = 10;
+      }
+    }
+
+    // Extract HP
+    const hpData = sys.attributes?.hp ?? {};
+    const hp = {
+      max: hpData.max ?? 0,
+      value: hpData.value ?? 0,
+      temp: hpData.temp ?? 0,
+    };
+
+    // Extract AC
+    const ac = sys.attributes?.ac?.value ?? 10;
+
+    // Extract speed
+    const speedData = sys.attributes?.speed;
+    let speed = '';
+    if (speedData) {
+      // D&D5e 2024 can have speed as string or object
+      if (typeof speedData === 'string') {
+        speed = speedData;
+      } else if (speedData.value) {
+        speed = `${speedData.value}${speedData.unit || 'ft'}`;
+      } else if (speedData.paces?.walk) {
+        speed = `${speedData.paces.walk}${speedData.unit || 'ft'}`;
+      }
+    }
+
+    // Extract spell slots
+    const spellSlots = sys.spells ?? {};
+
+    // Extract proficiency bonus
+    const profBonus = sys.attributes?.prof ?? 2;
+
+    // Find class item
+    const classItem = actor.items.find((i: any) => i.type === 'class');
+    const classInfo = classItem
+      ? {
+          name: classItem.name,
+          level: classItem.system?.levels ?? 1,
+          hitDice: classItem.system?.hitDice ?? 'd8',
+        }
+      : null;
+
+    // Find race item
+    const raceItem = actor.items.find((i: any) => i.type === 'race');
+    const raceInfo = raceItem
+      ? {
+          name: raceItem.name,
+          speed: raceItem.system?.speed?.value ?? undefined,
+        }
+      : null;
+
+    // Get total level (from details.level or class levels)
+    const level = sys.details?.level ?? classItem?.system?.levels ?? 1;
+
+    // List items (compact, excluding spells)
+    const items = actor.items
+      .filter((i: any) => i.type !== 'spell')
+      .map((i: any) => ({
+        name: i.name,
+        type: i.type,
+        equipped: i.system?.equipped ?? false,
+      }));
+
+    // List spells
+    const spells = actor.items
+      .filter((i: any) => i.type === 'spell')
+      .map((s: any) => ({
+        name: s.name,
+        level: s.system?.level ?? 0,
+        school: s.system?.school ?? '',
+        prepared: s.system?.prepared ?? false,
+      }));
+
+    // List features (feature, class, race, background)
+    const featureTypes = ['feature', 'class', 'race', 'background'];
+    const features = actor.items
+      .filter((i: any) => featureTypes.includes(i.type))
+      .map((f: any) => ({
+        name: f.name,
+        type: f.type,
+      }));
+
+    return success({
+      name: actor.name,
+      class: classInfo,
+      race: raceInfo,
+      level,
+      hp,
+      ac,
+      speed,
+      profBonus,
+      abilities: abilityScores,
+      saves,
+      spellSlots,
+      items,
+      spells,
+      features,
+    });
+  } catch (err) {
+    return error(`Failed to get character summary: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -2509,6 +2722,37 @@ async function searchAll(args: Record<string, unknown>): Promise<QueryResult> {
     return success({ totalResults, sources: allResults });
   } catch (err) {
     return error(`Failed to search all: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// ─── Character Validation ──────────────────────────────────────────
+
+async function validateCharacterHandler(
+  args: Record<string, unknown>
+): Promise<QueryResult> {
+  try {
+    const actorId = args.actorId as string | undefined;
+    const name = args.name as string | undefined;
+
+    if (!actorId && !name) {
+      return error("Either actorId or name must be provided");
+    }
+
+    let actor: any = null;
+    if (actorId) {
+      actor = game.actors.get(actorId);
+    } else if (name) {
+      actor = game.actors.getName(name);
+    }
+
+    if (!actor) {
+      return error(`Actor not found: ${actorId ?? name}`);
+    }
+
+    const result = validateCharacter(actor);
+    return success(result);
+  } catch (err) {
+    return error(`Failed to validate character: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

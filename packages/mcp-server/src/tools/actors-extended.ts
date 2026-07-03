@@ -9,6 +9,7 @@ export function registerActorExtendedTools(server: McpServer, client: IFoundryCl
     {
       actorId: z.string().describe('Actor ID to get items for'),
       type: z.enum(['weapon', 'equipment', 'consumable', 'spell', 'feature', 'loot', 'class', 'race', 'background']).optional().describe('Filter items by type'),
+      compact: z.boolean().optional().describe('Return compact item data (name, type, equipped, key stats only). Reduces response from ~130KB to ~1-3KB.'),
     },
     async (args) => {
       const content = await client.callMethod('get-actor-items', args);
@@ -92,6 +93,31 @@ export function registerActorExtendedTools(server: McpServer, client: IFoundryCl
     },
     async (args) => {
       const content = await client.callMethod('delete-actors-by-type', args);
+      return { content };
+    }
+  );
+
+  server.tool(
+    'get-character-summary',
+    'Returns a compact (~2KB) summary of a character with all essential fields: class, race, level, HP, AC, abilities, saves, spell slots, items, spells, features. Much lighter than get-actor for character review.',
+    {
+      actorId: z.string().describe('Actor ID to get summary for'),
+    },
+    async (args) => {
+      const content = await client.callMethod('get-character-summary', args);
+      return { content };
+    }
+  );
+
+  server.tool(
+    'validate-character',
+    'Validates a D&D 2024 character against PHB rules. Returns structured errors/warnings for: save proficiencies, spell slots, HP, proficiency bonus, point buy, spell lists, spell levels, cantrip count, armor/weapon proficiencies, background, and languages.',
+    {
+      actorId: z.string().optional().describe('Actor ID to validate'),
+      name: z.string().optional().describe('Actor name to search for'),
+    },
+    async (args) => {
+      const content = await client.callMethod('validate-character', args);
       return { content };
     }
   );
