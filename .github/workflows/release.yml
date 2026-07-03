@@ -3,6 +3,7 @@ name: Auto Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 # Cancel in-flight runs for the same branch
 concurrency:
@@ -14,8 +15,8 @@ permissions:
 
 jobs:
   release:
-    # Skip commits made by this workflow (version bump)
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    # Skip commits made by this workflow (version bump). workflow_dispatch always runs.
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -43,7 +44,6 @@ jobs:
           NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
           echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "Bumping version: $CURRENT → $NEW_VERSION"
-          # Update module.json
           jq --arg v "$NEW_VERSION" '.version = $v' packages/foundry-module/module.json > tmp.json
           mv tmp.json packages/foundry-module/module.json
 
@@ -68,7 +68,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add packages/foundry-module/module.json
-          # Amend the manifest URL on raw.githubusercontent.com so it always points to main
           git diff --cached --quiet || \
             git commit -m "chore: bump module version to ${{ steps.version.outputs.new }} [skip ci]" && \
             git push
