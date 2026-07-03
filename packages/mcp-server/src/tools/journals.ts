@@ -26,4 +26,16 @@ export function registerJournalTools(server: McpServer, client: IFoundryClient):
       return { content };
     }
   );
+
+  server.tool(
+    'search-journals',
+    'Search journal entries by text query (searches names and content)',
+    {
+      query: z.string().describe('Search query to match against journal names and content'),
+    },
+    async (args) => {
+      const content = await client.callMethod('search-journals', args);
+      return { content };
+    }
+  );
 }

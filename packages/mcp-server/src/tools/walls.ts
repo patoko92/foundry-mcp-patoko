@@ -5,17 +5,13 @@ import type { IFoundryClient } from '../types.js';
 export function registerWallTools(server: McpServer, client: IFoundryClient): void {
   server.tool(
     'create-wall',
-    'Create a wall segment on a scene. Provide either pixel coordinates (x1,y1,x2,y2) or grid coordinates (gridX1,gridY1,gridX2,gridY2) — not both.',
+    'Create a wall segment on a scene. Walls block movement, sight, and/or light.',
     {
       sceneId: z.string().optional().describe('Scene ID (defaults to active scene)'),
-      x1: z.number().optional().describe('Start X coordinate in pixels'),
-      y1: z.number().optional().describe('Start Y coordinate in pixels'),
-      x2: z.number().optional().describe('End X coordinate in pixels'),
-      y2: z.number().optional().describe('End Y coordinate in pixels'),
-      gridX1: z.number().optional().describe('Start grid column'),
-      gridY1: z.number().optional().describe('Start grid row'),
-      gridX2: z.number().optional().describe('End grid column'),
-      gridY2: z.number().optional().describe('End grid row'),
+      x1: z.number().describe('Start X coordinate in pixels'),
+      y1: z.number().describe('Start Y coordinate in pixels'),
+      x2: z.number().describe('End X coordinate in pixels'),
+      y2: z.number().describe('End Y coordinate in pixels'),
       door: z.boolean().optional().describe('Is this a door? (default: false)'),
       doorState: z.enum(['closed', 'open', 'locked']).optional().describe('Door state (default: closed)'),
       movement: z.number().optional().describe('Movement restriction: 0=None, 1=Base, 2=Centaur (default: 1)'),
@@ -25,6 +21,28 @@ export function registerWallTools(server: McpServer, client: IFoundryClient): vo
     },
     async (args) => {
       const content = await client.callMethod('create-wall', args);
+      return { content };
+    }
+  );
+
+  server.tool(
+    'create-wall-grid',
+    'Create a wall segment using grid coordinates (auto-converts to pixels).',
+    {
+      sceneId: z.string().optional().describe('Scene ID (defaults to active scene)'),
+      gridX1: z.number().describe('Start grid column'),
+      gridY1: z.number().describe('Start grid row'),
+      gridX2: z.number().describe('End grid column'),
+      gridY2: z.number().describe('End grid row'),
+      door: z.boolean().optional().describe('Is this a door? (default: false)'),
+      doorState: z.enum(['closed', 'open', 'locked']).optional().describe('Door state (default: closed)'),
+      movement: z.number().optional().describe('Movement restriction: 0=None, 1=Base, 2=Centaur (default: 1)'),
+      sight: z.number().optional().describe('Sight restriction: 0=None, 1=Normal, 2=Limited (default: 1)'),
+      light: z.number().optional().describe('Light restriction: 0=None, 1=Normal, 2=Limited (default: 1)'),
+      direction: z.number().optional().describe('Wall direction: 0=Both, 1=Left, 2=Right (default: 0)'),
+    },
+    async (args) => {
+      const content = await client.callMethod('create-wall-grid', args);
       return { content };
     }
   );
