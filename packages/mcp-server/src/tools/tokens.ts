@@ -5,9 +5,9 @@ import type { IFoundryClient } from '../types.js';
 export function registerTokenTools(server: McpServer, client: IFoundryClient): void {
   server.tool(
     'list-tokens',
-    'List all tokens on a scene (defaults to current active scene)',
+    'List all tokens on a scene. Without sceneId: scans ALL scenes and groups tokens by scene. With sceneId: returns tokens from that specific scene only.',
     {
-      sceneId: z.string().optional().describe('Scene ID to list tokens from (defaults to active scene)'),
+      sceneId: z.string().optional().describe('Scene ID to list tokens from. Omit to scan all scenes.'),
     },
     async (args) => {
       const content = await client.callMethod('list-tokens', args);
@@ -17,10 +17,10 @@ export function registerTokenTools(server: McpServer, client: IFoundryClient): v
 
   server.tool(
     'get-token-details',
-    'Get detailed information about a specific token by ID',
+    'Get detailed information about a specific token by ID. Without sceneId: searches canvas first, then all scenes. With sceneId: looks only on that scene.',
     {
       tokenId: z.string().describe('Token ID to look up'),
-      sceneId: z.string().optional().describe('Scene ID to search in (defaults to active scene)'),
+      sceneId: z.string().optional().describe('Scene ID to search in (optional — searches all scenes if omitted)'),
     },
     async (args) => {
       const content = await client.callMethod('get-token-details', args);

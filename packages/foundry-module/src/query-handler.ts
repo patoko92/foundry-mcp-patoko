@@ -803,25 +803,60 @@ async function createJournal(
 
 // ─── Tokens ─────────────────────────────────────────────────────────
 
-async function listTokens(): Promise<QueryResult> {
-  if (!canvas?.tokens?.placeables) {
-    return success([]);
+async function listTokens(args: Record<string, unknown>): Promise<QueryResult> {
+  const sceneId = args.sceneId as string | undefined;
+
+  function extractTokenData(t: any) {
+    const doc = t.document ?? t;
+    return {
+      _id: doc.id ?? t.id,
+      name: doc.name ?? t.name,
+      actorId: doc.actorId ?? t.actorId,
+      x: doc.x ?? t.x,
+      y: doc.y ?? t.y,
+      img: doc.img ?? t.img,
+      width: doc.width ?? t.width,
+      height: doc.height ?? t.height,
+      hidden: doc.hidden ?? t.hidden,
+      disposition: doc.disposition ?? t.disposition,
+    };
   }
 
-  const tokens = canvas.tokens.placeables.map((t: any) => ({
-    _id: t.id ?? t.document?.id,
-    name: t.name ?? t.document?.name,
-    actorId: t.actorId ?? t.document?.actorId,
-    x: t.x ?? t.document?.x,
-    y: t.y ?? t.document?.y,
-    img: t.img ?? t.document?.img,
-    width: t.width ?? t.document?.width,
-    height: t.height ?? t.document?.height,
-    hidden: t.hidden ?? t.document?.hidden,
-    disposition: t.disposition ?? t.document?.disposition,
-  }));
+  // Specific scene requested
+  if (sceneId) {
+    const scene = game.scenes?.get(sceneId);
+    if (!scene) return error(`Scene not found: ${sceneId}`);
 
-  return success(tokens);
+    const isActive = scene.id === game.scenes?.current?.id;
+    const tokens = (scene.tokens?.contents ?? []).map(extractTokenData);
+
+    return success({
+      sceneId: scene.id,
+      sceneName: scene.name,
+      isActive,
+      tokenCount: tokens.length,
+      tokens,
+    });
+  }
+
+  // No sceneId — scan all scenes
+  const activeSceneId = game.scenes?.current?.id;
+  const results: any[] = [];
+
+  for (const scene of game.scenes?.contents ?? []) {
+    const tokens = (scene.tokens?.contents ?? []).map(extractTokenData);
+    if (tokens.length === 0) continue;
+
+    results.push({
+      sceneId: scene.id,
+      sceneName: scene.name,
+      isActive: scene.id === activeSceneId,
+      tokenCount: tokens.length,
+      tokens,
+    });
+  }
+
+  return success(results);
 }
 
 async function getTokenDetails(
@@ -829,47 +864,91 @@ async function getTokenDetails(
 ): Promise<QueryResult> {
   const tokenId = args.tokenId as string;
   if (!tokenId) return error('tokenId is required');
+  const sceneId = args.sceneId as string | undefined;
 
-  if (!canvas?.tokens?.placeables) {
-    return error('Canvas not available');
+  // Helper to extract token data from a scene token document
+  function extractSceneToken(doc: any, scene: any) {
+    const data = doc.toObject ? doc.toObject() : doc;
+    return {
+      _id: data._id ?? doc.id,
+      name: data.name ?? doc.name,
+      actorId: data.actorId ?? doc.actorId,
+      x: data.x ?? doc.x,
+      y: data.y ?? doc.y,
+      img: data.img ?? doc.img,
+      width: data.width ?? doc.width,
+      height: data.height ?? doc.height,
+      hidden: data.hidden ?? doc.hidden,
+      disposition: data.disposition ?? doc.disposition,
+      elevation: data.elevation ?? doc.elevation,
+      actor: doc.actor
+        ? {
+            _id: doc.actor.id,
+            name: doc.actor.name,
+            type: doc.actor.type,
+          }
+        : null,
+      scene: {
+        _id: scene.id,
+        name: scene.name,
+        isActive: scene.id === game.scenes?.current?.id,
+      },
+    };
   }
 
-  const token = canvas.tokens.placeables.find(
-    (t: any) => (t.id ?? t.document?.id) === tokenId
-  );
-
-  if (!token) {
-    // Try scene tokens directly
-    const scene = game.scenes.current;
-    if (scene) {
-      const sceneToken = scene.tokens?.get(tokenId);
-      if (sceneToken) {
-        return success(sceneToken.toObject ? sceneToken.toObject() : sceneToken);
-      }
+  // If specific sceneId given, look there first
+  if (sceneId) {
+    const scene = game.scenes?.get(sceneId);
+    if (!scene) return error(`Scene not found: ${sceneId}`);
+    const sceneToken = scene.tokens?.get(tokenId);
+    if (sceneToken) {
+      return success(extractSceneToken(sceneToken, scene));
     }
-    return error(`Token not found: ${tokenId}`);
+    return error(`Token ${tokenId} not found on scene "${scene.name}"`);
   }
 
-  const doc: any = (token as any).document ?? token;
-  return success({
-    _id: doc.id,
-    name: doc.name,
-    actorId: doc.actorId,
-    x: doc.x,
-    y: doc.y,
-    img: doc.img,
-    width: doc.width,
-    height: doc.height,
-    hidden: doc.hidden,
-    disposition: doc.disposition,
-    actor: token.actor
-      ? {
-          _id: token.actor.id,
-          name: token.actor.name,
-          type: token.actor.type,
-        }
-      : null,
-  });
+  // No sceneId — try canvas first, then search all scenes
+  if (canvas?.tokens?.placeables) {
+    const token = canvas.tokens.placeables.find(
+      (t: any) => (t.id ?? t.document?.id) === tokenId
+    );
+    if (token) {
+      const doc: any = (token as any).document ?? token;
+      const activeScene = game.scenes?.current;
+      return success({
+        _id: doc.id,
+        name: doc.name,
+        actorId: doc.actorId,
+        x: doc.x,
+        y: doc.y,
+        img: doc.img,
+        width: doc.width,
+        height: doc.height,
+        hidden: doc.hidden,
+        disposition: doc.disposition,
+        actor: token.actor
+          ? {
+              _id: token.actor.id,
+              name: token.actor.name,
+              type: token.actor.type,
+            }
+          : null,
+        scene: activeScene
+          ? { _id: activeScene.id, name: activeScene.name, isActive: true }
+          : null,
+      });
+    }
+  }
+
+  // Not on canvas — search all scenes
+  for (const scene of game.scenes?.contents ?? []) {
+    const sceneToken = scene.tokens?.get(tokenId);
+    if (sceneToken) {
+      return success(extractSceneToken(sceneToken, scene));
+    }
+  }
+
+  return error(`Token not found: ${tokenId}`);
 }
 
 async function moveToken(
