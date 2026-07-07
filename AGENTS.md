@@ -33,10 +33,12 @@ cd packages/foundry-module && npm run build
 - Commit convention: `type: concise subject` (feat, fix, refactor, docs, chore)
 - After every change: `git add -A && git commit -m "..." && git push`
 
-## Deploy (sv2)
+## Deploy (sv2) — MCP Server ONLY
+
+> ⚠️ **DO NOT update the Foundry module on sv2.** The Foundry module (`packages/foundry-module/`) is deployed manually by Patrick. Lucy only handles the MCP server (`packages/mcp-server/`).
 
 ```bash
-ssh sv2 'cd /opt/foundry-mcp-patoko && git pull && npm install && npm run build && systemctl restart foundry-mcp-bridge'
+ssh sv2 'cd /opt/foundry-vtt-mcp && git pull && npm install && npm run build && systemctl restart foundry-mcp-bridge'
 ```
 
 ## MCP Tool Testing Protocol
