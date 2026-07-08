@@ -5,6 +5,7 @@
  */
 
 import { validateCharacter } from './validate-character.js';
+import { listAdvancements, applyAdvancement } from './advancement.js';
 
 const WRITE_METHODS = new Set([
   'createActor',
@@ -48,6 +49,8 @@ const WRITE_METHODS = new Set([
   'createRoom',
   'deleteWall',
   'updateItem',
+  // Advancement
+  'applyAdvancement',
   // Compendium Management
   'importToCompendium',
   'createCompendium',
@@ -202,6 +205,9 @@ const methodMap: Record<string, MethodHandler> = {
   searchJournals,
   // Character Validation
   validateCharacterHandler,
+  // Advancement (D&D 5e)
+  listAdvancements,
+  applyAdvancement,
   // Compendium Management
   importToCompendium,
   createCompendium,
