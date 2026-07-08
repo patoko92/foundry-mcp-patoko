@@ -610,8 +610,15 @@ async function searchCompendium(
 
   if (!query) return error('query is required');
 
+  // Known Foundry document types (pack-level). Any other typeFilter value
+  // is treated as a dnd5e document subtype (background, race, class, etc.)
+  // and applied at the individual document level instead.
+  const DOCUMENT_TYPES = new Set(['Item', 'Actor', 'JournalEntry', 'Scene', 'RollTable', 'Macro', 'Cards', 'Playlist']);
+  const isDocumentType = typeFilter && DOCUMENT_TYPES.has(typeFilter);
+
+  // Only filter packs by Foundry document type, not by dnd5e item subtype
   let packs = game.packs.filter(
-    (p: any) => !typeFilter || p.metadata?.type === typeFilter
+    (p: any) => !isDocumentType || p.metadata?.type === typeFilter
   );
 
   if (packIds?.length) {
@@ -631,13 +638,17 @@ async function searchCompendium(
       const matches: any[] = [];
       for (const doc of docs) {
         if (matches.length >= limit) break;
+        const docType = doc.type ?? pack.metadata?.type;
+        // Apply type filter at document level (matches dnd5e subtypes like
+        // background, race, class, weapon, spell, npc, etc.)
+        if (typeFilter && !isDocumentType && docType !== typeFilter) continue;
         if (doc.name?.toLowerCase().includes(query)) {
           matches.push({
             pack: pack.collection,
             packLabel: pack.metadata?.label ?? pack.collection,
             id: doc.id ?? doc._id,
             name: doc.name,
-            type: doc.type ?? pack.metadata?.type,
+            type: docType,
             img: doc.img,
           });
         }
@@ -1377,8 +1388,43 @@ async function getCharacterSummary(
       temp: hpData.temp ?? 0,
     };
 
-    // Extract AC
-    const ac = sys.attributes?.ac?.value ?? 10;
+    // Extract AC — use the computed value from the system data model.
+    // In dnd5e v4 (2024), actor.system.attributes.ac.value should be the
+    // prepared/computed AC. If it looks like a raw base value (10), the
+    // actor's derived data may not have been prepared yet, so we compute
+    // AC from equipped armor as a fallback.
+    const acData = sys.attributes?.ac;
+    let ac: number;
+    if (acData && typeof acData === 'object') {
+      ac = acData.value ?? 10;
+    } else if (typeof acData === 'number') {
+      ac = acData;
+    } else {
+      ac = 10;
+    }
+    // Fallback: if AC looks like a base/unarmored value, try computing from equipment
+    if (ac <= 10) {
+      const dexMod = Math.floor(((sys.abilities?.dex?.value ?? 10) - 10) / 2);
+      const equippedItems = actor.items.filter(
+        (i: any) => i.type === 'equipment' && i.system?.equipped
+      );
+      const armor = equippedItems.find(
+        (i: any) => i.system?.armor?.type && i.system.armor.type !== 'shield'
+      );
+      const shield = equippedItems.find(
+        (i: any) => i.system?.armor?.type === 'shield'
+      );
+      if (armor) {
+        const armorBase = armor.system.armor.value ?? 10;
+        const maxDex = armor.system.armor.dex ?? dexMod;
+        ac = armorBase + Math.min(dexMod, maxDex);
+      } else {
+        ac = 10 + dexMod;
+      }
+      if (shield) {
+        ac += shield.system.armor.value ?? 2;
+      }
+    }
 
     // Extract speed
     const speedData = sys.attributes?.speed;
@@ -1406,7 +1452,13 @@ async function getCharacterSummary(
       ? {
           name: classItem.name,
           level: classItem.system?.levels ?? 1,
-          hitDice: classItem.system?.hitDice ?? 'd8',
+          // In dnd5e v4 (2024), hit dice may be at system.hitDice (string
+          // like 'd10'), system.hitDice.value, or system.hd. Try each path
+          // to handle system version differences.
+          hitDice: classItem.system?.hitDice
+            ?? classItem.system?.hitDiceValue
+            ?? classItem.system?.hd
+            ?? 'unknown',
         }
       : null;
 
@@ -1486,23 +1538,61 @@ async function addItemToActor(
     if (!actor) return error(`Actor not found: ${actorId}`);
 
     let itemData: any;
+    let itemSource = 'inline data';
 
     if (pack && itemId) {
       const compendiumPack = game.packs.get(pack);
       if (!compendiumPack) return error(`Compendium pack not found: ${pack}`);
 
       const doc = await compendiumPack.getDocument(itemId);
-      if (!doc) return error(`Item not found in pack: ${itemId}`);
+      if (!doc) return error(`Item not found in pack: ${itemId} (pack: ${pack})`);
 
       itemData = doc.toObject ? doc.toObject() : doc;
+      itemSource = `compendium ${pack}`;
     } else if (data) {
       itemData = data;
     } else {
       return error('Either pack+itemId or data must be provided');
     }
 
-    const created = await actor.createEmbeddedDocuments('Item', [itemData]);
-    if (!created?.length) return error('Failed to create item on actor');
+    const itemName = itemData.name ?? 'unknown';
+    const itemType = itemData.type ?? 'unknown';
+
+    // Pre-check: warn if adding a type that typically only has one instance
+    // (background, class, race) and one already exists
+    const singletonTypes = new Set(['background', 'class', 'race']);
+    if (singletonTypes.has(itemType)) {
+      const existing = actor.items.find((i: any) => i.type === itemType);
+      if (existing) {
+        return error(
+          `Actor "${actor.name}" already has a ${itemType} ("${existing.name}"). `
+          + `Adding another ${itemType} ("${itemName}" from ${itemSource}) may cause conflicts. `
+          + `Remove the existing ${itemType} first, or use update-item to modify it.`
+        );
+      }
+    }
+
+    // Attempt to create the embedded document
+    let created: any[];
+    try {
+      created = await actor.createEmbeddedDocuments('Item', [itemData]);
+    } catch (createErr: unknown) {
+      // Surface the actual system error with context
+      const cause = createErr instanceof Error ? createErr.message : String(createErr);
+      return error(
+        `System rejected item "${itemName}" (type: ${itemType}) on actor "${actor.name}": ${cause}. `
+        + `Source: ${itemSource}. This may be a dnd5e system validation error — `
+        + `check that the item data is compatible with the system version.`
+      );
+    }
+
+    if (!created?.length) {
+      return error(
+        `Item creation returned empty result for "${itemName}" (type: ${itemType}) `
+        + `on actor "${actor.name}". Source: ${itemSource}. `
+        + `The dnd5e system may have silently rejected the item — check the Foundry console for warnings.`
+      );
+    }
 
     return success({
       _id: created[0].id,
