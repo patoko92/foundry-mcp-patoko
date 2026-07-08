@@ -15,6 +15,7 @@ import { registerFolderTools } from './tools/folders.js';
 import { registerTableTools } from './tools/tables.js';
 import { registerWallTools } from './tools/walls.js';
 import { registerItemTools } from './tools/items.js';
+import { registerAdvancementTools } from './tools/advancements.js';
 
 /**
  * Register all MCP tools on the server.
@@ -35,6 +36,7 @@ export function registerAllTools(server: McpServer, client: IFoundryClient): voi
   registerTableTools(server, client);
   registerWallTools(server, client);
   registerItemTools(server, client);
+  registerAdvancementTools(server, client);
 
   console.error('[register-tools] All tools registered');
 }

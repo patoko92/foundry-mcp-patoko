@@ -140,6 +140,37 @@ declare global {
     new (...args: any[]): any;
   }
 
+  // D&D5e system global
+  const dnd5e: {
+    documents: {
+      advancement: Record<string, any>;
+      [key: string]: any;
+    };
+    [key: string]: any;
+  };
+
+  // Foundry utility namespace
+  const foundry: {
+    utils: {
+      isEmpty(obj: any): boolean;
+      deepClone<T>(obj: T): T;
+      getProperty(obj: any, path: string): any;
+      hasProperty(obj: any, path: string): boolean;
+      setProperty(obj: any, path: string, value: any): boolean;
+      mergeObject<T>(original: T, other: any, options?: any): T;
+      randomID(): string;
+      [key: string]: any;
+    };
+    [key: string]: any;
+  };
+
+  // UUID resolution helpers
+  function fromUuidSync(uuid: string): any;
+  function fromUuid(uuid: string): Promise<any>;
+
+  // Item constructor (for compendium operations)
+  const Item: DocumentConstructor;
+
   interface SettingConfig {
     name: string;
     hint?: string;
