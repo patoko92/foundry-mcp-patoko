@@ -14,7 +14,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MOCK_SERVER_DIR="$PROJECT_ROOT/packages/mock-server"
 MCP_SERVER_DIR="$PROJECT_ROOT/packages/mcp-server"
 
-MOCK_PORT=31415
+# Use a port distinct from the production bridge server (which binds 31415)
+# so the mock server and the live bridge don't collide on the same host.
+MOCK_PORT=${MOCK_PORT:-31416}
 MOCK_PID=""
 RESULT="FAIL"
 

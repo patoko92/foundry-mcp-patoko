@@ -6,7 +6,8 @@
   "workspaces": [
     "packages/shared",
     "packages/mcp-server",
-    "packages/foundry-module"
+    "packages/foundry-module",
+    "packages/mock-server"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
