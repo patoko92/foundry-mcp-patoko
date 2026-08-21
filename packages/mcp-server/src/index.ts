@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import type { IFoundryClient } from './types.js';
 import { FoundryClient } from './foundry-client.js';
 import { MockFoundryClient } from './mock-client.js';
@@ -18,24 +18,28 @@ async function main(): Promise<void> {
   // Connect to Foundry (or init mock)
   await client.connect();
 
-  // Create MCP server
-  const server = new McpServer({
-    name: 'foundry-mcp-patoko',
-    version: '0.1.0',
+  // Serve over stdio via MCP SDK v2 (2026-07-28). serveStdio owns the transport and
+  // calls the factory to build the server instance per connection. By default it
+  // serves BOTH protocol eras: 2026-07-28 (MCP 2.0) AND legacy 2025-era clients
+  // (initialize handshake), so it stays compatible with current MCP clients.
+  const handle = serveStdio(() => {
+    const server = new McpServer({
+      name: 'foundry-mcp-patoko',
+      version: '0.1.0',
+    });
+
+    // Register all tools
+    registerAllTools(server, client);
+
+    return server;
   });
-
-  // Register all tools
-  registerAllTools(server, client);
-
-  // Connect to stdio transport
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
 
   console.error('[foundry-mcp-patoko] Server started, waiting for connections...');
 
   // Graceful shutdown
   const shutdown = () => {
     console.error('[foundry-mcp-patoko] Shutting down...');
+    void handle.close();
     client.disconnect();
     process.exit(0);
   };

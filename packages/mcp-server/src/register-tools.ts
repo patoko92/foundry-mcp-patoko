@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from "@modelcontextprotocol/server";
 import type { IFoundryClient } from './types.js';
 import { registerWorldTools } from './tools/world.js';
 import { registerActorTools } from './tools/actors.js';
